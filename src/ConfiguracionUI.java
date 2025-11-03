@@ -92,7 +92,7 @@ public class ConfiguracionUI {
         JPanel panelNumeros = new JPanel(new BorderLayout());
         panelNumeros.setBorder(BorderFactory.createTitledBorder("Lista de números disponibles"));
 
-        JLabel instrucciones = new JLabel("Gestione números individuales o rangos (ej. 1-10).", JLabel.LEFT);
+        JLabel instrucciones = new JLabel("Gestione números individuales o rangos (ej. 1-10 o 1-10@2 para 2 decimales).", JLabel.LEFT);
         instrucciones.setFont(new Font("Arial", Font.PLAIN, 14));
         panelNumeros.add(instrucciones, BorderLayout.NORTH);
         panelNumeros.add(scrollNumeros, BorderLayout.CENTER);
@@ -193,7 +193,12 @@ public class ConfiguracionUI {
         try (PrintWriter pw = new PrintWriter(new FileWriter(NUMEROS_PATH))) {
             for (RangoNumero rango : modelo.obtenerRangos()) {
                 if (rango.esRango()) {
-                    pw.println(formatear(rango.getInicio()) + "-" + formatear(rango.getFin()));
+                    StringBuilder linea = new StringBuilder();
+                    linea.append(formatear(rango.getInicio())).append("-").append(formatear(rango.getFin()));
+                    if (rango.usaDecimales()) {
+                        linea.append("@").append(rango.getDecimales());
+                    }
+                    pw.println(linea);
                 } else {
                     pw.println(formatear(rango.getInicio()));
                 }
@@ -205,7 +210,7 @@ public class ConfiguracionUI {
 
     private static List<RangoNumero> leerNumerosComoLista(String ruta) {
         List<RangoNumero> numeros = new ArrayList<>();
-        Pattern rangoPattern = Pattern.compile("\\s*(-?\\d+(?:\\.\\d+)?)[\\s]*-[\\s]*(-?\\d+(?:\\.\\d+)?)\\s*");
+        Pattern rangoPattern = Pattern.compile("\\s*(-?\\d+(?:\\.\\d+)?)[\\s]*-[\\s]*(-?\\d+(?:\\.\\d+)?)(?:\\s*@\\s*(\\d+))?\\s*");
         try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
             String linea;
             while ((linea = br.readLine()) != null) {
@@ -217,11 +222,12 @@ public class ConfiguracionUI {
                 if (matcher.matches()) {
                     BigDecimal inicio = new BigDecimal(matcher.group(1));
                     BigDecimal fin = new BigDecimal(matcher.group(2));
-                    numeros.add(crearRangoOrdenado(inicio, fin));
+                    int decimales = matcher.group(3) != null ? Integer.parseInt(matcher.group(3)) : inferirDecimales(inicio, fin);
+                    numeros.add(crearRangoOrdenado(inicio, fin, decimales));
                 } else {
                     try {
                         BigDecimal valor = new BigDecimal(linea);
-                        numeros.add(new RangoNumero(valor, valor));
+                        numeros.add(new RangoNumero(valor, valor, inferirDecimales(valor, valor)));
                     } catch (NumberFormatException ex) {
                         System.out.println("Valor de número inválido encontrado en " + ruta + ": " + linea);
                     }
@@ -261,14 +267,62 @@ public class ConfiguracionUI {
         if (fin == null) {
             return null;
         }
-        return crearRangoOrdenado(inicio, fin);
+        RangoDecimales decimales = solicitarDecimales(parent, inicio, fin);
+        if (decimales == null) {
+            return null;
+        }
+        return crearRangoOrdenado(inicio, fin, decimales.decimales);
     }
 
-    private static RangoNumero crearRangoOrdenado(BigDecimal inicio, BigDecimal fin) {
-        if (inicio.compareTo(fin) <= 0) {
-            return new RangoNumero(inicio, fin);
+    private static RangoNumero crearRangoOrdenado(BigDecimal inicio, BigDecimal fin, int decimales) {
+        BigDecimal desde = inicio;
+        BigDecimal hasta = fin;
+        if (inicio.compareTo(fin) > 0) {
+            desde = fin;
+            hasta = inicio;
         }
-        return new RangoNumero(fin, inicio);
+        return new RangoNumero(desde, hasta, Math.max(0, decimales));
+    }
+
+    private static int inferirDecimales(BigDecimal inicio, BigDecimal fin) {
+        return Math.max(obtenerEscala(inicio), obtenerEscala(fin));
+    }
+
+    private static int obtenerEscala(BigDecimal valor) {
+        int escala = valor.stripTrailingZeros().scale();
+        return Math.max(escala, 0);
+    }
+
+    private static RangoDecimales solicitarDecimales(Component parent, BigDecimal inicio, BigDecimal fin) {
+        JCheckBox chkDecimales = new JCheckBox("Incluir números decimales en este rango");
+        int escalaExistente = inferirDecimales(inicio, fin);
+        if (escalaExistente > 0) {
+            chkDecimales.setSelected(true);
+        }
+
+        SpinnerNumberModel modeloSpinner = new SpinnerNumberModel(Math.max(escalaExistente, 1), 1, 6, 1);
+        JSpinner spnDecimales = new JSpinner(modeloSpinner);
+        spnDecimales.setEnabled(chkDecimales.isSelected());
+
+        chkDecimales.addActionListener(e -> spnDecimales.setEnabled(chkDecimales.isSelected()));
+
+        JPanel panel = new JPanel(new GridLayout(0, 1, 5, 5));
+        panel.add(chkDecimales);
+
+        JPanel filaDecimales = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        filaDecimales.add(new JLabel("Cantidad de decimales:"));
+        filaDecimales.add(spnDecimales);
+        panel.add(filaDecimales);
+
+        int opcion = JOptionPane.showConfirmDialog(parent, panel, "Opciones de decimales", JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (opcion != JOptionPane.OK_OPTION) {
+            return null;
+        }
+
+        if (chkDecimales.isSelected()) {
+            return new RangoDecimales(true, (Integer) spnDecimales.getValue());
+        }
+        return new RangoDecimales(false, 0);
     }
 
     private static String formatear(BigDecimal numero) {
@@ -284,7 +338,7 @@ public class ConfiguracionUI {
         private final Component parent;
         private final List<RangoNumero> rangos;
 
-        private final String[] columnas = {"Desde", "Hasta"};
+        private final String[] columnas = {"Desde", "Hasta", "¿Decimales?", "Cantidad de decimales"};
 
         private NumerosTableModel(Component parent, List<RangoNumero> rangosIniciales) {
             this.parent = parent;
@@ -309,14 +363,40 @@ public class ConfiguracionUI {
         @Override
         public Object getValueAt(int rowIndex, int columnIndex) {
             RangoNumero rango = rangos.get(rowIndex);
-            if (columnIndex == 0) {
-                return formatear(rango.getInicio());
+            switch (columnIndex) {
+                case 0:
+                    return formatear(rango.getInicio());
+                case 1:
+                    return rango.esRango() ? formatear(rango.getFin()) : "";
+                case 2:
+                    return rango.usaDecimales();
+                case 3:
+                    return rango.usaDecimales() ? rango.getDecimales() : 0;
+                default:
+                    return "";
             }
-            return rango.esRango() ? formatear(rango.getFin()) : "";
+        }
+
+        @Override
+        public Class<?> getColumnClass(int columnIndex) {
+            if (columnIndex == 2) {
+                return Boolean.class;
+            }
+            if (columnIndex == 3) {
+                return Integer.class;
+            }
+            return String.class;
         }
 
         @Override
         public boolean isCellEditable(int rowIndex, int columnIndex) {
+            RangoNumero rango = rangos.get(rowIndex);
+            if (columnIndex >= 2 && !rango.esRango()) {
+                return false;
+            }
+            if (columnIndex == 3) {
+                return rango.usaDecimales();
+            }
             return true;
         }
 
@@ -360,11 +440,32 @@ public class ConfiguracionUI {
                 } catch (NumberFormatException ex) {
                     JOptionPane.showMessageDialog(parent, "Ingresa un número válido.");
                 }
+            } else if (columnIndex == 2) {
+                boolean habilitar = aValue instanceof Boolean ? (Boolean) aValue : Boolean.parseBoolean(valor);
+                if (!habilitar && (tieneDecimales(rango.getInicio()) || tieneDecimales(rango.getFin()))) {
+                    JOptionPane.showMessageDialog(parent, "El rango contiene valores con decimales. Ajusta los valores antes de deshabilitar los decimales.");
+                    fireTableCellUpdated(rowIndex, columnIndex);
+                    return;
+                }
+                rango.habilitarDecimales(habilitar);
+                fireTableRowsUpdated(rowIndex, rowIndex);
+            } else if (columnIndex == 3) {
+                try {
+                    int cantidad = aValue instanceof Number ? ((Number) aValue).intValue() : Integer.parseInt(valor);
+                    if (cantidad <= 0) {
+                        JOptionPane.showMessageDialog(parent, "La cantidad de decimales debe ser mayor a cero.");
+                        return;
+                    }
+                    rango.setDecimales(cantidad);
+                    fireTableCellUpdated(rowIndex, columnIndex);
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(parent, "Ingresa un número entero válido para la cantidad de decimales.");
+                }
             }
         }
 
         private void agregarNumero(BigDecimal numero) {
-            rangos.add(new RangoNumero(numero, numero));
+            rangos.add(new RangoNumero(numero, numero, obtenerEscala(numero)));
             int nuevaFila = rangos.size() - 1;
             fireTableRowsInserted(nuevaFila, nuevaFila);
         }
@@ -386,15 +487,23 @@ public class ConfiguracionUI {
         private List<RangoNumero> obtenerRangos() {
             return new ArrayList<>(rangos);
         }
+
+        private boolean tieneDecimales(BigDecimal valor) {
+            return obtenerEscala(valor) > 0;
+        }
     }
 
     private static class RangoNumero {
         private BigDecimal inicio;
         private BigDecimal fin;
 
-        private RangoNumero(BigDecimal inicio, BigDecimal fin) {
+        private int decimales;
+
+        private RangoNumero(BigDecimal inicio, BigDecimal fin, int decimales) {
             this.inicio = inicio;
             this.fin = fin;
+            this.decimales = Math.max(0, decimales);
+            ajustarDecimalesSegunValores();
         }
 
         private BigDecimal getInicio() {
@@ -403,6 +512,10 @@ public class ConfiguracionUI {
 
         private void setInicio(BigDecimal inicio) {
             this.inicio = inicio;
+            if (fin == null || inicio.compareTo(fin) > 0) {
+                this.fin = inicio;
+            }
+            ajustarDecimalesSegunValores();
         }
 
         private BigDecimal getFin() {
@@ -411,10 +524,47 @@ public class ConfiguracionUI {
 
         private void setFin(BigDecimal fin) {
             this.fin = fin;
+            ajustarDecimalesSegunValores();
         }
 
         private boolean esRango() {
             return fin != null && inicio.compareTo(fin) != 0;
+        }
+
+        private boolean usaDecimales() {
+            return decimales > 0;
+        }
+
+        private int getDecimales() {
+            return decimales;
+        }
+
+        private void setDecimales(int decimales) {
+            this.decimales = Math.max(0, decimales);
+            ajustarDecimalesSegunValores();
+        }
+
+        private void habilitarDecimales(boolean habilitar) {
+            if (!habilitar) {
+                this.decimales = 0;
+            } else if (decimales == 0) {
+                this.decimales = Math.max(1, Math.max(obtenerEscala(inicio), obtenerEscala(fin)));
+            }
+        }
+
+        private void ajustarDecimalesSegunValores() {
+            int escala = Math.max(obtenerEscala(inicio), obtenerEscala(fin));
+            if (escala > decimales) {
+                decimales = escala;
+            }
+        }
+    }
+
+    private static class RangoDecimales {
+        private final int decimales;
+
+        private RangoDecimales(boolean habilitado, int decimales) {
+            this.decimales = habilitado ? Math.max(1, decimales) : 0;
         }
     }
 

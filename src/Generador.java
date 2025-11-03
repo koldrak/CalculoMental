@@ -1,6 +1,8 @@
 import java.io.*;
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.swing.JOptionPane;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
@@ -8,6 +10,8 @@ import javax.script.ScriptException;
 
 
 public class Generador {
+    private static final Pattern PATRON_RANGO = Pattern.compile("\\s*(-?\\d+(?:\\.\\d+)?)[\\s]*-[\\s]*(-?\\d+(?:\\.\\d+)?)(?:\\s*@\\s*(\\d+))?\\s*");
+
     private boolean permitirDecimales = true;
     private boolean permitirNegativos = true;
     private List<Double> numeros;
@@ -434,10 +438,10 @@ public class Generador {
                 }
 
                 if (linea.contains("-")) {
-                    Optional<BigDecimal[]> rango = intentarParsearRango(linea);
+                    Optional<RangoDatos> rango = intentarParsearRango(linea);
                     if (rango.isPresent()) {
-                        BigDecimal[] limites = rango.get();
-                        agregarRango(valores, limites[0], limites[1], linea);
+                        RangoDatos datos = rango.get();
+                        agregarRango(valores, datos.inicio, datos.fin, datos.decimales, linea);
                         continue;
                     }
                 }
@@ -454,33 +458,36 @@ public class Generador {
         return valores;
     }
 
-    private Optional<BigDecimal[]> intentarParsearRango(String linea) {
-        String expresion = linea.replaceAll("\\s+", "");
-        int separador = expresion.indexOf('-', 1); // ignora signo inicial si existe
-        if (separador <= 0 || separador >= expresion.length() - 1) {
+    private Optional<RangoDatos> intentarParsearRango(String linea) {
+        String expresion = linea.trim();
+        Matcher matcher = PATRON_RANGO.matcher(expresion);
+        if (!matcher.matches()) {
             return Optional.empty();
         }
 
         try {
-            BigDecimal inicio = new BigDecimal(expresion.substring(0, separador));
-            BigDecimal fin = new BigDecimal(expresion.substring(separador + 1));
-            if (inicio.compareTo(fin) <= 0) {
-                return Optional.of(new BigDecimal[]{inicio, fin});
+            BigDecimal inicio = new BigDecimal(matcher.group(1));
+            BigDecimal fin = new BigDecimal(matcher.group(2));
+            if (inicio.compareTo(fin) > 0) {
+                BigDecimal tmp = inicio;
+                inicio = fin;
+                fin = tmp;
             }
-            return Optional.of(new BigDecimal[]{fin, inicio});
+            int decimales = matcher.group(3) != null ? Integer.parseInt(matcher.group(3)) : inferirDecimales(inicio, fin);
+            return Optional.of(new RangoDatos(inicio, fin, Math.max(0, decimales)));
         } catch (NumberFormatException ex) {
             return Optional.empty();
         }
     }
 
-    private void agregarRango(List<Double> valores, BigDecimal inicioBD, BigDecimal finBD, String lineaOriginal) {
+    private void agregarRango(List<Double> valores, BigDecimal inicioBD, BigDecimal finBD, int decimales, String lineaOriginal) {
 
         if (inicioBD.compareTo(finBD) == 0) {
             valores.add(inicioBD.doubleValue());
             return;
         }
 
-        BigDecimal paso = determinarPaso(inicioBD, finBD);
+        BigDecimal paso = determinarPaso(inicioBD, finBD, decimales);
         if (paso.compareTo(BigDecimal.ZERO) <= 0) {
             System.out.println("No se pudo determinar paso para el rango: " + lineaOriginal);
             return;
@@ -494,33 +501,39 @@ public class Generador {
             }
         }
 
-        double finDouble = finBD.doubleValue();
-        if (valores.size() == sizeAntes) {
-            valores.add(finDouble);
-            return;
-        }
-
-        double ultimo = valores.get(valores.size() - 1);
-        if (Math.abs(ultimo - finDouble) > 1e-9) {
-            valores.add(finDouble);
+        if (valores.size() == sizeAntes || Math.abs(valores.get(valores.size() - 1) - finBD.doubleValue()) > 1e-9) {
+            valores.add(finBD.doubleValue());
         }
     }
 
-    private BigDecimal determinarPaso(BigDecimal inicio, BigDecimal fin) {
-        int escala = Math.max(inicio.stripTrailingZeros().scale(), fin.stripTrailingZeros().scale());
-        if (escala < 0) {
-            escala = 0;
-        }
-        BigDecimal paso = BigDecimal.ONE.movePointLeft(escala);
-        if (paso.compareTo(BigDecimal.ZERO) <= 0) {
-            paso = BigDecimal.ONE;
-        }
-
+    private BigDecimal determinarPaso(BigDecimal inicio, BigDecimal fin, int decimales) {
+        BigDecimal paso = decimales > 0 ? BigDecimal.ONE.movePointLeft(decimales) : BigDecimal.ONE;
         BigDecimal diferencia = fin.subtract(inicio).abs();
         if (diferencia.compareTo(paso) < 0) {
             return diferencia;
         }
         return paso;
+    }
+
+    private int inferirDecimales(BigDecimal inicio, BigDecimal fin) {
+        return Math.max(obtenerEscala(inicio), obtenerEscala(fin));
+    }
+
+    private int obtenerEscala(BigDecimal valor) {
+        int escala = valor.stripTrailingZeros().scale();
+        return Math.max(escala, 0);
+    }
+
+    private static class RangoDatos {
+        private final BigDecimal inicio;
+        private final BigDecimal fin;
+        private final int decimales;
+
+        private RangoDatos(BigDecimal inicio, BigDecimal fin, int decimales) {
+            this.inicio = inicio;
+            this.fin = fin;
+            this.decimales = decimales;
+        }
     }
     private List<String> leerSimbolosDesdeConfig(String ruta) {
         List<String> simbolos = new ArrayList<>();
