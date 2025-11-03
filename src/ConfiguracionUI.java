@@ -1,7 +1,16 @@
 import javax.swing.*;
-import java.awt.*;
+import javax.swing.table.AbstractTableModel;
+import java.awt.BorderLayout;
+import java.awt.Component;
+import java.awt.Dimension;
+import java.awt.FlowLayout;
+import java.awt.Font;
+import java.awt.GridLayout;
 import java.io.*;
+import java.math.BigDecimal;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public class ConfiguracionUI {
 
@@ -29,8 +38,11 @@ public class ConfiguracionUI {
 
         JTextField txtCantidadOperaciones = new JTextField();
 
-        JTextArea areaNumeros = new JTextArea(10, 30);
-        JScrollPane scrollNumeros = new JScrollPane(areaNumeros);
+        List<RangoNumero> numerosDisponibles = leerNumerosComoLista(NUMEROS_PATH);
+        NumerosTableModel numerosModel = new NumerosTableModel(frame, numerosDisponibles);
+        JTable tablaNumeros = new JTable(numerosModel);
+        tablaNumeros.setFillsViewportHeight(true);
+        JScrollPane scrollNumeros = new JScrollPane(tablaNumeros);
 
         // Cargar configuración actual
         Map<String, String> config = leerArchivoComoMapa(CONFIG_PATH);
@@ -47,8 +59,7 @@ public class ConfiguracionUI {
         chkMultiplicacion.setSelected("SI".equalsIgnoreCase(simbolos.getOrDefault("MULTIPLICACION", "NO")));
         chkDivision.setSelected("SI".equalsIgnoreCase(simbolos.getOrDefault("DIVISION", "NO")));
 
-        String textoNumeros = leerArchivoTexto(NUMEROS_PATH).replaceAll("\\R+", ", ");
-        areaNumeros.setText(textoNumeros.trim());
+        tablaNumeros.setPreferredScrollableViewportSize(new Dimension(300, 200));
 
         // Añadir al panel
         opcionesPanel.add(chkDecimales);
@@ -69,7 +80,7 @@ public class ConfiguracionUI {
         btnGuardar.addActionListener(e -> {
         	guardarConfig(chkDecimales, chkNegativos, chkParentesis, chkDespejarX, txtCantidadOperaciones.getText());
             guardarSimbolos(chkSuma, chkResta, chkMultiplicacion, chkDivision);
-            guardarNumeros(areaNumeros.getText());
+            guardarNumeros(numerosModel);
 
             JOptionPane.showMessageDialog(frame, "Configuración guardada correctamente.");
             frame.dispose();
@@ -81,10 +92,42 @@ public class ConfiguracionUI {
         JPanel panelNumeros = new JPanel(new BorderLayout());
         panelNumeros.setBorder(BorderFactory.createTitledBorder("Lista de números disponibles"));
 
-        JLabel instrucciones = new JLabel("Escribalos numero separos por una coma, por ejemplo: 1, 2, 10, 50", JLabel.LEFT);
+        JLabel instrucciones = new JLabel("Gestione números individuales o rangos (ej. 1-10).", JLabel.LEFT);
         instrucciones.setFont(new Font("Arial", Font.PLAIN, 14));
         panelNumeros.add(instrucciones, BorderLayout.NORTH);
         panelNumeros.add(scrollNumeros, BorderLayout.CENTER);
+
+        JPanel botonesNumeros = new JPanel(new FlowLayout(FlowLayout.LEFT));
+        JButton btnAgregarNumero = new JButton("Agregar número");
+        btnAgregarNumero.addActionListener(e -> {
+            BigDecimal numero = solicitarNumero(frame, "Ingresa el número a agregar:");
+            if (numero != null) {
+                numerosModel.agregarNumero(numero);
+            }
+        });
+
+        JButton btnAgregarRango = new JButton("Agregar rango");
+        btnAgregarRango.addActionListener(e -> {
+            RangoNumero rango = solicitarRango(frame);
+            if (rango != null) {
+                numerosModel.agregarRango(rango);
+            }
+        });
+
+        JButton btnEliminarSeleccion = new JButton("Eliminar selección");
+        btnEliminarSeleccion.addActionListener(e -> {
+            int[] filasSeleccionadas = tablaNumeros.getSelectedRows();
+            if (filasSeleccionadas.length == 0) {
+                JOptionPane.showMessageDialog(frame, "Selecciona al menos una fila para eliminar.");
+                return;
+            }
+            numerosModel.eliminarFilas(filasSeleccionadas);
+        });
+
+        botonesNumeros.add(btnAgregarNumero);
+        botonesNumeros.add(btnAgregarRango);
+        botonesNumeros.add(btnEliminarSeleccion);
+        panelNumeros.add(botonesNumeros, BorderLayout.SOUTH);
 
         frame.add(panelNumeros, BorderLayout.CENTER);
 
@@ -146,18 +189,232 @@ public class ConfiguracionUI {
         }
     }
 
-    private static void guardarNumeros(String contenido) {
+    private static void guardarNumeros(NumerosTableModel modelo) {
         try (PrintWriter pw = new PrintWriter(new FileWriter(NUMEROS_PATH))) {
-            // Separar por comas y limpiar espacios
-            String[] numeros = contenido.split(",");
-            for (String numero : numeros) {
-                numero = numero.trim();
-                if (!numero.isEmpty()) {
-                    pw.println(numero);
+            for (RangoNumero rango : modelo.obtenerRangos()) {
+                if (rango.esRango()) {
+                    pw.println(formatear(rango.getInicio()) + "-" + formatear(rango.getFin()));
+                } else {
+                    pw.println(formatear(rango.getInicio()));
                 }
             }
         } catch (IOException e) {
             System.out.println("Error al guardar numeros.txt");
+        }
+    }
+
+    private static List<RangoNumero> leerNumerosComoLista(String ruta) {
+        List<RangoNumero> numeros = new ArrayList<>();
+        Pattern rangoPattern = Pattern.compile("\\s*(-?\\d+(?:\\.\\d+)?)[\\s]*-[\\s]*(-?\\d+(?:\\.\\d+)?)\\s*");
+        try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
+            String linea;
+            while ((linea = br.readLine()) != null) {
+                linea = linea.trim();
+                if (linea.isEmpty()) {
+                    continue;
+                }
+                Matcher matcher = rangoPattern.matcher(linea);
+                if (matcher.matches()) {
+                    BigDecimal inicio = new BigDecimal(matcher.group(1));
+                    BigDecimal fin = new BigDecimal(matcher.group(2));
+                    numeros.add(crearRangoOrdenado(inicio, fin));
+                } else {
+                    try {
+                        BigDecimal valor = new BigDecimal(linea);
+                        numeros.add(new RangoNumero(valor, valor));
+                    } catch (NumberFormatException ex) {
+                        System.out.println("Valor de número inválido encontrado en " + ruta + ": " + linea);
+                    }
+                }
+            }
+        } catch (IOException e) {
+            System.out.println("No se pudo leer " + ruta);
+        }
+        return numeros;
+    }
+
+    private static BigDecimal solicitarNumero(Component parent, String mensaje) {
+        while (true) {
+            String input = JOptionPane.showInputDialog(parent, mensaje);
+            if (input == null) {
+                return null;
+            }
+            input = input.trim();
+            if (input.isEmpty()) {
+                JOptionPane.showMessageDialog(parent, "El campo no puede estar vacío.");
+                continue;
+            }
+            try {
+                return new BigDecimal(input);
+            } catch (NumberFormatException ex) {
+                JOptionPane.showMessageDialog(parent, "Ingresa un número válido.");
+            }
+        }
+    }
+
+    private static RangoNumero solicitarRango(Component parent) {
+        BigDecimal inicio = solicitarNumero(parent, "Ingresa el valor inicial del rango:");
+        if (inicio == null) {
+            return null;
+        }
+        BigDecimal fin = solicitarNumero(parent, "Ingresa el valor final del rango:");
+        if (fin == null) {
+            return null;
+        }
+        return crearRangoOrdenado(inicio, fin);
+    }
+
+    private static RangoNumero crearRangoOrdenado(BigDecimal inicio, BigDecimal fin) {
+        if (inicio.compareTo(fin) <= 0) {
+            return new RangoNumero(inicio, fin);
+        }
+        return new RangoNumero(fin, inicio);
+    }
+
+    private static String formatear(BigDecimal numero) {
+        BigDecimal normalizado = numero.stripTrailingZeros();
+        if (normalizado.scale() < 0) {
+            normalizado = normalizado.setScale(0);
+        }
+        return normalizado.toPlainString();
+    }
+
+    private static class NumerosTableModel extends AbstractTableModel {
+
+        private final Component parent;
+        private final List<RangoNumero> rangos;
+
+        private final String[] columnas = {"Desde", "Hasta"};
+
+        private NumerosTableModel(Component parent, List<RangoNumero> rangosIniciales) {
+            this.parent = parent;
+            this.rangos = new ArrayList<>(rangosIniciales);
+        }
+
+        @Override
+        public int getRowCount() {
+            return rangos.size();
+        }
+
+        @Override
+        public int getColumnCount() {
+            return columnas.length;
+        }
+
+        @Override
+        public String getColumnName(int column) {
+            return columnas[column];
+        }
+
+        @Override
+        public Object getValueAt(int rowIndex, int columnIndex) {
+            RangoNumero rango = rangos.get(rowIndex);
+            if (columnIndex == 0) {
+                return formatear(rango.getInicio());
+            }
+            return rango.esRango() ? formatear(rango.getFin()) : "";
+        }
+
+        @Override
+        public boolean isCellEditable(int rowIndex, int columnIndex) {
+            return true;
+        }
+
+        @Override
+        public void setValueAt(Object aValue, int rowIndex, int columnIndex) {
+            if (aValue == null) {
+                return;
+            }
+            String valor = aValue.toString().trim();
+            if (columnIndex == 0 && valor.isEmpty()) {
+                JOptionPane.showMessageDialog(parent, "El valor inicial no puede quedar vacío.");
+                return;
+            }
+
+            RangoNumero rango = rangos.get(rowIndex);
+            if (columnIndex == 0) {
+                try {
+                    BigDecimal inicio = new BigDecimal(valor);
+                    rango.setInicio(inicio);
+                    if (rango.getFin() == null || inicio.compareTo(rango.getFin()) > 0) {
+                        rango.setFin(inicio);
+                    }
+                    fireTableRowsUpdated(rowIndex, rowIndex);
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(parent, "Ingresa un número válido.");
+                }
+            } else if (columnIndex == 1) {
+                if (valor.isEmpty()) {
+                    rango.setFin(rango.getInicio());
+                    fireTableRowsUpdated(rowIndex, rowIndex);
+                    return;
+                }
+                try {
+                    BigDecimal fin = new BigDecimal(valor);
+                    if (fin.compareTo(rango.getInicio()) < 0) {
+                        JOptionPane.showMessageDialog(parent, "El final del rango no puede ser menor que el inicio.");
+                        return;
+                    }
+                    rango.setFin(fin);
+                    fireTableRowsUpdated(rowIndex, rowIndex);
+                } catch (NumberFormatException ex) {
+                    JOptionPane.showMessageDialog(parent, "Ingresa un número válido.");
+                }
+            }
+        }
+
+        private void agregarNumero(BigDecimal numero) {
+            rangos.add(new RangoNumero(numero, numero));
+            int nuevaFila = rangos.size() - 1;
+            fireTableRowsInserted(nuevaFila, nuevaFila);
+        }
+
+        private void agregarRango(RangoNumero rango) {
+            rangos.add(rango);
+            int nuevaFila = rangos.size() - 1;
+            fireTableRowsInserted(nuevaFila, nuevaFila);
+        }
+
+        private void eliminarFilas(int[] filas) {
+            Arrays.sort(filas);
+            for (int i = filas.length - 1; i >= 0; i--) {
+                rangos.remove(filas[i]);
+            }
+            fireTableDataChanged();
+        }
+
+        private List<RangoNumero> obtenerRangos() {
+            return new ArrayList<>(rangos);
+        }
+    }
+
+    private static class RangoNumero {
+        private BigDecimal inicio;
+        private BigDecimal fin;
+
+        private RangoNumero(BigDecimal inicio, BigDecimal fin) {
+            this.inicio = inicio;
+            this.fin = fin;
+        }
+
+        private BigDecimal getInicio() {
+            return inicio;
+        }
+
+        private void setInicio(BigDecimal inicio) {
+            this.inicio = inicio;
+        }
+
+        private BigDecimal getFin() {
+            return fin;
+        }
+
+        private void setFin(BigDecimal fin) {
+            this.fin = fin;
+        }
+
+        private boolean esRango() {
+            return fin != null && inicio.compareTo(fin) != 0;
         }
     }
 
