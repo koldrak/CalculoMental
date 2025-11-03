@@ -1,5 +1,8 @@
 import java.io.*;
+import java.math.BigDecimal;
 import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import javax.swing.JOptionPane;
 import javax.script.ScriptEngine;
 import javax.script.ScriptEngineManager;
@@ -7,9 +10,11 @@ import javax.script.ScriptException;
 
 
 public class Generador {
+    private static final Pattern PATRON_RANGO = Pattern.compile("\\s*(-?\\d+(?:\\.\\d+)?)[\\s]*-[\\s]*(-?\\d+(?:\\.\\d+)?)(?:\\s*@\\s*(\\d+))?\\s*");
+
     private boolean permitirDecimales = true;
     private boolean permitirNegativos = true;
-    private List<String> numeros;
+    private List<Double> numeros;
     private List<String> simbolos;
     private int cantidadOperaciones =2;
     private boolean permitirParentesis = false;
@@ -17,7 +22,10 @@ public class Generador {
 
  Generador() {
         String ruta = System.getProperty("user.dir") + "/";
-        numeros = leerLineas(ruta + "numeros.txt");
+        numeros = leerNumeros(ruta + "numeros.txt");
+        if (numeros.isEmpty()) {
+            mostrarErrorNumerosVacios();
+        }
         simbolos = leerSimbolosDesdeConfig(ruta + "simbolos.txt");
         if (simbolos.isEmpty()) {
             mostrarErrorSimbolosVacios();
@@ -47,14 +55,14 @@ public class Generador {
             intentos++;
 
             StringBuilder expresion = new StringBuilder();
-            double acumulador = Double.parseDouble(numeros.get(r.nextInt(numeros.size())));
+            double acumulador = numeros.get(r.nextInt(numeros.size()));
             expresion.append(acumulador);
 
             boolean valido = true;
 
             for (int i = 1; i < cantidadOperaciones; i++) {
                 String operador = simbolos.get(r.nextInt(simbolos.size()));
-                double siguiente = Double.parseDouble(numeros.get(r.nextInt(numeros.size())));
+                double siguiente = numeros.get(r.nextInt(numeros.size()));
 
                 if (operador.equals("/") && siguiente == 0) {
                     valido = false;
@@ -111,7 +119,7 @@ public class Generador {
         }
 
         // Fallback con varias divisiones exactas
-        double fallbackAcumulador = Double.parseDouble(numeros.get(r.nextInt(numeros.size())));
+        double fallbackAcumulador = numeros.get(r.nextInt(numeros.size()));
         StringBuilder expr = new StringBuilder(formatearNumero(fallbackAcumulador));
 
         for (int i = 1; i < cantidadOperaciones; i++) {
@@ -121,7 +129,7 @@ public class Generador {
                     divisor++;
                 }
             } else {
-                divisor = Double.parseDouble(numeros.get(r.nextInt(numeros.size())));
+                divisor = numeros.get(r.nextInt(numeros.size()));
                 if (divisor == 0) divisor = 1;
             }
 
@@ -361,8 +369,8 @@ public class Generador {
             }
 
          // Probar con distintos valores de X para encontrar uno que cumpla
-            double min = numeros.stream().mapToDouble(Double::parseDouble).min().orElse(-10);
-            double max = numeros.stream().mapToDouble(Double::parseDouble).max().orElse(10);
+            double min = numeros.stream().mapToDouble(Double::doubleValue).min().orElse(-10);
+            double max = numeros.stream().mapToDouble(Double::doubleValue).max().orElse(10);
 
             // Tomamos un número entero como resultado objetivo
             double resultadoEsperado = Math.round(min + r.nextDouble() * (max - min));
@@ -419,18 +427,113 @@ public class Generador {
         }
     }
 
-    private List<String> leerLineas(String ruta) {
-        List<String> out = new ArrayList<>();
+    private List<Double> leerNumeros(String ruta) {
+        List<Double> valores = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
             String linea;
             while ((linea = br.readLine()) != null) {
                 linea = linea.trim();
-                if (!linea.isEmpty()) out.add(linea);
+                if (linea.isEmpty()) {
+                    continue;
+                }
+
+                if (linea.contains("-")) {
+                    Optional<RangoDatos> rango = intentarParsearRango(linea);
+                    if (rango.isPresent()) {
+                        RangoDatos datos = rango.get();
+                        agregarRango(valores, datos.inicio, datos.fin, datos.decimales, linea);
+                        continue;
+                    }
+                }
+
+                try {
+                    valores.add(Double.parseDouble(linea));
+                } catch (NumberFormatException ex) {
+                    System.out.println("Valor de número inválido encontrado en " + ruta + ": " + linea);
+                }
             }
-        } catch (Exception e) {
-            System.out.println("Error al leer " + ruta);
+        } catch (IOException e) {
+            System.out.println("Error al leer " + ruta + ": " + e.getMessage());
         }
-        return out;
+        return valores;
+    }
+
+    private Optional<RangoDatos> intentarParsearRango(String linea) {
+        String expresion = linea.trim();
+        Matcher matcher = PATRON_RANGO.matcher(expresion);
+        if (!matcher.matches()) {
+            return Optional.empty();
+        }
+
+        try {
+            BigDecimal inicio = new BigDecimal(matcher.group(1));
+            BigDecimal fin = new BigDecimal(matcher.group(2));
+            if (inicio.compareTo(fin) > 0) {
+                BigDecimal tmp = inicio;
+                inicio = fin;
+                fin = tmp;
+            }
+            int decimales = matcher.group(3) != null ? Integer.parseInt(matcher.group(3)) : inferirDecimales(inicio, fin);
+            return Optional.of(new RangoDatos(inicio, fin, Math.max(0, decimales)));
+        } catch (NumberFormatException ex) {
+            return Optional.empty();
+        }
+    }
+
+    private void agregarRango(List<Double> valores, BigDecimal inicioBD, BigDecimal finBD, int decimales, String lineaOriginal) {
+
+        if (inicioBD.compareTo(finBD) == 0) {
+            valores.add(inicioBD.doubleValue());
+            return;
+        }
+
+        BigDecimal paso = determinarPaso(inicioBD, finBD, decimales);
+        if (paso.compareTo(BigDecimal.ZERO) <= 0) {
+            System.out.println("No se pudo determinar paso para el rango: " + lineaOriginal);
+            return;
+        }
+
+        int sizeAntes = valores.size();
+        for (BigDecimal actual = inicioBD; actual.compareTo(finBD) <= 0; actual = actual.add(paso)) {
+            valores.add(actual.doubleValue());
+            if (actual.add(paso).compareTo(actual) == 0) {
+                break; // evita bucle infinito si el paso es demasiado pequeño
+            }
+        }
+
+        if (valores.size() == sizeAntes || Math.abs(valores.get(valores.size() - 1) - finBD.doubleValue()) > 1e-9) {
+            valores.add(finBD.doubleValue());
+        }
+    }
+
+    private BigDecimal determinarPaso(BigDecimal inicio, BigDecimal fin, int decimales) {
+        BigDecimal paso = decimales > 0 ? BigDecimal.ONE.movePointLeft(decimales) : BigDecimal.ONE;
+        BigDecimal diferencia = fin.subtract(inicio).abs();
+        if (diferencia.compareTo(paso) < 0) {
+            return diferencia;
+        }
+        return paso;
+    }
+
+    private int inferirDecimales(BigDecimal inicio, BigDecimal fin) {
+        return Math.max(obtenerEscala(inicio), obtenerEscala(fin));
+    }
+
+    private int obtenerEscala(BigDecimal valor) {
+        int escala = valor.stripTrailingZeros().scale();
+        return Math.max(escala, 0);
+    }
+
+    private static class RangoDatos {
+        private final BigDecimal inicio;
+        private final BigDecimal fin;
+        private final int decimales;
+
+        private RangoDatos(BigDecimal inicio, BigDecimal fin, int decimales) {
+            this.inicio = inicio;
+            this.fin = fin;
+            this.decimales = decimales;
+        }
     }
     private List<String> leerSimbolosDesdeConfig(String ruta) {
         List<String> simbolos = new ArrayList<>();
@@ -520,16 +623,26 @@ public class Generador {
         );
         System.exit(0);
     }
+
+    private void mostrarErrorNumerosVacios() {
+        JOptionPane.showMessageDialog(
+            null,
+            "⚠ numeros.txt no contiene valores válidos.\n" +
+            "Revisa la configuración y asegúrate de definir números o rangos válidos (por ejemplo, 1-10).",
+            "Error de configuración",
+            JOptionPane.ERROR_MESSAGE
+        );
+        System.exit(0);
+    }
     private double getRandomNumero() {
-        return Double.parseDouble(numeros.get(new Random().nextInt(numeros.size())));
+        return numeros.get(new Random().nextInt(numeros.size()));
     }
 
     private double encontrarNumeroMasCercano(double objetivo) {
-        double cercano = Double.parseDouble(numeros.get(0));
+        double cercano = numeros.get(0);
         double diferenciaMinima = Math.abs(cercano - objetivo);
 
-        for (String s : numeros) {
-            double num = Double.parseDouble(s);
+        for (double num : numeros) {
             double diferencia = Math.abs(num - objetivo);
             if (diferencia < diferenciaMinima) {
                 cercano = num;
