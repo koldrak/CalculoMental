@@ -1,6 +1,9 @@
 import javax.swing.*;
 import javax.swing.table.AbstractTableModel;
+import javax.swing.table.DefaultTableCellRenderer;
+import javax.swing.table.TableCellRenderer;
 import java.awt.BorderLayout;
+import java.awt.Color;
 import java.awt.Component;
 import java.awt.Dimension;
 import java.awt.FlowLayout;
@@ -60,6 +63,9 @@ public class ConfiguracionUI {
         chkDivision.setSelected("SI".equalsIgnoreCase(simbolos.getOrDefault("DIVISION", "NO")));
 
         tablaNumeros.setPreferredScrollableViewportSize(new Dimension(300, 200));
+        tablaNumeros.getColumnModel().getColumn(1).setCellRenderer(new CeldaNegraRenderer(numerosModel));
+        tablaNumeros.getColumnModel().getColumn(2).setCellRenderer(new CheckboxNegroRenderer(numerosModel));
+        tablaNumeros.getColumnModel().getColumn(3).setCellRenderer(new CeldaNegraRenderer(numerosModel));
 
         // Añadir al panel
         opcionesPanel.add(chkDecimales);
@@ -369,9 +375,9 @@ public class ConfiguracionUI {
                 case 1:
                     return rango.esRango() ? formatear(rango.getFin()) : "";
                 case 2:
-                    return rango.usaDecimales();
+                    return rango.esRango() && rango.usaDecimales();
                 case 3:
-                    return rango.usaDecimales() ? rango.getDecimales() : 0;
+                    return rango.esRango() && rango.usaDecimales() ? rango.getDecimales() : 0;
                 default:
                     return "";
             }
@@ -391,8 +397,8 @@ public class ConfiguracionUI {
         @Override
         public boolean isCellEditable(int rowIndex, int columnIndex) {
             RangoNumero rango = rangos.get(rowIndex);
-            if (columnIndex >= 2 && !rango.esRango()) {
-                return false;
+            if (!rango.esRango()) {
+                return columnIndex == 0;
             }
             if (columnIndex == 3) {
                 return rango.usaDecimales();
@@ -488,8 +494,76 @@ public class ConfiguracionUI {
             return new ArrayList<>(rangos);
         }
 
+        private RangoNumero obtenerRango(int fila) {
+            return rangos.get(fila);
+        }
+
         private boolean tieneDecimales(BigDecimal valor) {
             return obtenerEscala(valor) > 0;
+        }
+    }
+
+    private static class CeldaNegraRenderer extends DefaultTableCellRenderer {
+
+        private final NumerosTableModel modelo;
+
+        private CeldaNegraRenderer(NumerosTableModel modelo) {
+            this.modelo = modelo;
+            setOpaque(true);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus,
+                                                       int row, int column) {
+            Component componente = super.getTableCellRendererComponent(table, value, false, false, row, column);
+            RangoNumero rango = modelo.obtenerRango(row);
+            if (!rango.esRango()) {
+                componente.setBackground(Color.BLACK);
+                componente.setForeground(Color.WHITE);
+            } else {
+                if (isSelected) {
+                    componente.setBackground(table.getSelectionBackground());
+                    componente.setForeground(table.getSelectionForeground());
+                } else {
+                    componente.setBackground(table.getBackground());
+                    componente.setForeground(table.getForeground());
+                }
+            }
+            return componente;
+        }
+    }
+
+    private static class CheckboxNegroRenderer extends JCheckBox implements TableCellRenderer {
+
+        private final NumerosTableModel modelo;
+
+        private CheckboxNegroRenderer(NumerosTableModel modelo) {
+            this.modelo = modelo;
+            setHorizontalAlignment(SwingConstants.CENTER);
+            setOpaque(true);
+        }
+
+        @Override
+        public Component getTableCellRendererComponent(JTable table, Object value, boolean isSelected, boolean hasFocus,
+                                                       int row, int column) {
+            boolean seleccionado = value instanceof Boolean ? (Boolean) value : Boolean.parseBoolean(String.valueOf(value));
+            setSelected(seleccionado);
+            RangoNumero rango = modelo.obtenerRango(row);
+            if (!rango.esRango()) {
+                setBackground(Color.BLACK);
+                setForeground(Color.WHITE);
+                setEnabled(false);
+            } else {
+                setEnabled(true);
+                if (isSelected) {
+                    setBackground(table.getSelectionBackground());
+                    setForeground(table.getSelectionForeground());
+                } else {
+                    setBackground(table.getBackground());
+                    setForeground(table.getForeground());
+                }
+            }
+            return this;
         }
     }
 
