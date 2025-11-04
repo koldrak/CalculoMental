@@ -1,5 +1,6 @@
 import java.io.*;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -11,6 +12,7 @@ import javax.script.ScriptException;
 
 public class Generador {
     private static final Pattern PATRON_RANGO = Pattern.compile("\\s*(-?\\d+(?:\\.\\d+)?)[\\s]*-[\\s]*(-?\\d+(?:\\.\\d+)?)(?:\\s*@\\s*(\\d+))?\\s*");
+    private static final int MAX_DECIMALES_VISIBLES = 6;
 
     private boolean permitirDecimales = true;
     private boolean permitirNegativos = true;
@@ -415,16 +417,23 @@ public class Generador {
     }
 
     private String formatearNumero(double n) {
-        if (n == Math.floor(n)) {
-            return String.valueOf((int) n); // si es entero, sin decimales
-        } else {
-            double redondeado = Math.round(n * 100.0) / 100.0;
-            if (redondeado == Math.floor(redondeado)) {
-                return String.valueOf((int) redondeado);
-            } else {
-                return String.format("%.2f", redondeado);
-            }
+        BigDecimal bd = new BigDecimal(Double.toString(n));
+
+        if (bd.scale() > MAX_DECIMALES_VISIBLES) {
+            bd = bd.setScale(MAX_DECIMALES_VISIBLES, RoundingMode.HALF_UP);
         }
+
+        bd = bd.stripTrailingZeros();
+
+        if (bd.scale() < 0) {
+            bd = bd.setScale(0);
+        }
+
+        if (bd.compareTo(BigDecimal.ZERO) == 0) {
+            return "0";
+        }
+
+        return bd.toPlainString();
     }
 
     private List<Double> leerNumeros(String ruta) {
