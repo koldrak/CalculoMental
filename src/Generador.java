@@ -62,7 +62,7 @@ public class Generador {
 
             StringBuilder expresion = new StringBuilder();
             double acumulador = numeros.get(r.nextInt(numeros.size()));
-            expresion.append(acumulador);
+            expresion.append(formatearNumero(acumulador));
 
             boolean valido = true;
 
@@ -80,7 +80,7 @@ public class Generador {
                     break;
                 }
 
-                expresion.append(" ").append(operador).append(" ").append(siguiente);
+                expresion.append(" ").append(operador).append(" ").append(formatearNumero(siguiente));
 
                 switch (operador) {
                 case "/":
@@ -444,31 +444,30 @@ public class Generador {
     }
 
     private List<Double> ajustarDecimalesSegunConfiguracion(List<Double> originales) {
-        if (permitirDecimales) {
+        if (originales.isEmpty()) {
             return originales;
         }
 
-        List<Double> enteros = new ArrayList<>();
-        boolean seDescartoAlguno = false;
+        if (permitirDecimales) {
+            return new ArrayList<>(originales);
+        }
 
+        boolean hayDecimales = false;
+        List<Double> copia = new ArrayList<>(originales.size());
         for (double valor : originales) {
-            double redondeado = Math.rint(valor);
-            if (Math.abs(valor - redondeado) < EPSILON) {
-                enteros.add(redondeado);
-            } else {
-                seDescartoAlguno = true;
+            copia.add(valor);
+            if (!hayDecimales && Math.abs(valor - Math.rint(valor)) > EPSILON) {
+                hayDecimales = true;
             }
         }
 
-        if (enteros.isEmpty() && !originales.isEmpty()) {
-            mostrarErrorDecimalesIncompatibles();
+        if (hayDecimales) {
+            System.out.println(
+                "numeros.txt contiene valores con decimales. Se usarán igualmente, pero los resultados se redondearán a enteros porque la opción de decimales está deshabilitada."
+            );
         }
 
-        if (seDescartoAlguno) {
-            System.out.println("Algunos valores con decimales fueron ignorados porque la configuración actual no los permite.");
-        }
-
-        return enteros;
+        return copia;
     }
 
     private List<Double> leerNumeros(String ruta) {
@@ -677,17 +676,6 @@ public class Generador {
             "Para que el generador funcione, debes habilitar al menos una de estas líneas en simbolos.txt:\n" +
             "SUMA: SI\nRESTA: SI\nMULTIPLICACIÓN: SI\nDIVISIÓN: SI\n\n" +
             "Corrige el archivo y vuelve a ejecutar el programa.",
-            "Error de configuración",
-            JOptionPane.ERROR_MESSAGE
-        );
-        System.exit(0);
-    }
-
-    private void mostrarErrorDecimalesIncompatibles() {
-        JOptionPane.showMessageDialog(
-            null,
-            "⚠ numeros.txt solo contiene valores con decimales, pero la configuración actual no los permite.\n" +
-            "Habilita los decimales en config.txt o reemplaza los rangos por números enteros.",
             "Error de configuración",
             JOptionPane.ERROR_MESSAGE
         );
