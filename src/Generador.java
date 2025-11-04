@@ -13,6 +13,7 @@ import javax.script.ScriptException;
 public class Generador {
     private static final Pattern PATRON_RANGO = Pattern.compile("\\s*(-?\\d+(?:\\.\\d+)?)[\\s]*-[\\s]*(-?\\d+(?:\\.\\d+)?)(?:\\s*@\\s*(\\d+))?\\s*");
     private static final int MAX_DECIMALES_VISIBLES = 6;
+    private static final double EPSILON = 1e-9;
 
     private boolean permitirDecimales = true;
     private boolean permitirNegativos = true;
@@ -22,18 +23,21 @@ public class Generador {
     private boolean permitirParentesis = false;
     private boolean permitirDespejarX = false;
 
- Generador() {
+    Generador() {
         String ruta = System.getProperty("user.dir") + "/";
-        numeros = leerNumeros(ruta + "numeros.txt");
+
+        leerConfig(ruta + "config.txt");
+
+        List<Double> numerosLeidos = leerNumeros(ruta + "numeros.txt");
+        numeros = ajustarDecimalesSegunConfiguracion(numerosLeidos);
         if (numeros.isEmpty()) {
             mostrarErrorNumerosVacios();
         }
+
         simbolos = leerSimbolosDesdeConfig(ruta + "simbolos.txt");
         if (simbolos.isEmpty()) {
             mostrarErrorSimbolosVacios();
         }
-
-        leerConfig(ruta + "config.txt");
     }
 
  public List<Ejercicio> generarEjercicios() {
@@ -122,21 +126,24 @@ public class Generador {
 
         // Fallback con varias divisiones exactas
         double fallbackAcumulador = numeros.get(r.nextInt(numeros.size()));
+        if (!permitirDecimales) {
+            fallbackAcumulador = Math.rint(fallbackAcumulador);
+        }
+
         StringBuilder expr = new StringBuilder(formatearNumero(fallbackAcumulador));
 
         for (int i = 1; i < cantidadOperaciones; i++) {
-            double divisor = 1;
             if (!permitirDecimales) {
-                while (fallbackAcumulador % divisor != 0) {
-                    divisor++;
-                }
+                long acumuladorEntero = Math.round(fallbackAcumulador);
+                long divisorEntero = seleccionarDivisorEntero(acumuladorEntero);
+                expr.append(" / ").append(formatearNumero(divisorEntero));
+                fallbackAcumulador = acumuladorEntero / (double) divisorEntero;
             } else {
-                divisor = numeros.get(r.nextInt(numeros.size()));
-                if (divisor == 0) divisor = 1;
+                double divisor = numeros.get(r.nextInt(numeros.size()));
+                if (Math.abs(divisor) < EPSILON) divisor = 1;
+                expr.append(" / ").append(formatearNumero(divisor));
+                fallbackAcumulador = fallbackAcumulador / divisor;
             }
-
-            expr.append(" / ").append(formatearNumero(divisor));
-            fallbackAcumulador = fallbackAcumulador / divisor;
         }
 
         double resultado = permitirDecimales ? fallbackAcumulador : Math.round(fallbackAcumulador);
@@ -436,6 +443,34 @@ public class Generador {
         return bd.toPlainString();
     }
 
+    private List<Double> ajustarDecimalesSegunConfiguracion(List<Double> originales) {
+        if (permitirDecimales) {
+            return originales;
+        }
+
+        List<Double> enteros = new ArrayList<>();
+        boolean seDescartoAlguno = false;
+
+        for (double valor : originales) {
+            double redondeado = Math.rint(valor);
+            if (Math.abs(valor - redondeado) < EPSILON) {
+                enteros.add(redondeado);
+            } else {
+                seDescartoAlguno = true;
+            }
+        }
+
+        if (enteros.isEmpty() && !originales.isEmpty()) {
+            mostrarErrorDecimalesIncompatibles();
+        }
+
+        if (seDescartoAlguno) {
+            System.out.println("Algunos valores con decimales fueron ignorados porque la configuración actual no los permite.");
+        }
+
+        return enteros;
+    }
+
     private List<Double> leerNumeros(String ruta) {
         List<Double> valores = new ArrayList<>();
         try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
@@ -487,6 +522,21 @@ public class Generador {
         } catch (NumberFormatException ex) {
             return Optional.empty();
         }
+    }
+
+    private long seleccionarDivisorEntero(long valor) {
+        long absoluto = Math.abs(valor);
+        if (absoluto <= 1) {
+            return 1;
+        }
+
+        for (long divisor = 2; divisor <= absoluto; divisor++) {
+            if (absoluto % divisor == 0) {
+                return divisor;
+            }
+        }
+
+        return 1;
     }
 
     private void agregarRango(List<Double> valores, BigDecimal inicioBD, BigDecimal finBD, int decimales, String lineaOriginal) {
@@ -627,6 +677,17 @@ public class Generador {
             "Para que el generador funcione, debes habilitar al menos una de estas líneas en simbolos.txt:\n" +
             "SUMA: SI\nRESTA: SI\nMULTIPLICACIÓN: SI\nDIVISIÓN: SI\n\n" +
             "Corrige el archivo y vuelve a ejecutar el programa.",
+            "Error de configuración",
+            JOptionPane.ERROR_MESSAGE
+        );
+        System.exit(0);
+    }
+
+    private void mostrarErrorDecimalesIncompatibles() {
+        JOptionPane.showMessageDialog(
+            null,
+            "⚠ numeros.txt solo contiene valores con decimales, pero la configuración actual no los permite.\n" +
+            "Habilita los decimales en config.txt o reemplaza los rangos por números enteros.",
             "Error de configuración",
             JOptionPane.ERROR_MESSAGE
         );
