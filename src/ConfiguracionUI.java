@@ -26,7 +26,7 @@ public class ConfiguracionUI {
 
         JPanel opcionesPanel = new JPanel(new GridLayout(0, 2, 10, 10));
 
-        JCheckBox chkDecimales = new JCheckBox("Permitir Decimales");
+        JCheckBox chkDecimales = new JCheckBox("Permitir resultados con deciminales");
         JCheckBox chkNegativos = new JCheckBox("Permitir Números Negativos");
         JCheckBox chkParentesis = new JCheckBox("Permitir Paréntesis");
         JCheckBox chkDespejarX = new JCheckBox("Incluir ejercicios con incógnita X");

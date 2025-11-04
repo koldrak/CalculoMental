@@ -1,4 +1,9 @@
+import java.math.BigDecimal;
+import java.math.RoundingMode;
+
 public class Ejercicio {
+    private static final int MAX_DECIMALES_VISIBLES = 6;
+
     public double a, b, resultado;
     public String operador, operadorVisible;
 
@@ -15,16 +20,23 @@ public class Ejercicio {
     }
 
     protected String formatearNumero(double n) {
-        if (n == Math.floor(n)) {
-            return String.valueOf((int) n); // si es entero, sin decimales
-        } else {
-            double redondeado = Math.round(n * 100.0) / 100.0;
-            if (redondeado == Math.floor(redondeado)) {
-                return String.valueOf((int) redondeado); // por si redondea a entero (ej: 10.00 → 10)
-            } else {
-                return String.format("%.2f", redondeado); // solo 2 decimales visibles si son necesarios
-            }
+        BigDecimal bd = new BigDecimal(Double.toString(n));
+
+        if (bd.scale() > MAX_DECIMALES_VISIBLES) {
+            bd = bd.setScale(MAX_DECIMALES_VISIBLES, RoundingMode.HALF_UP);
         }
+
+        bd = bd.stripTrailingZeros();
+
+        if (bd.scale() < 0) {
+            bd = bd.setScale(0);
+        }
+
+        if (bd.compareTo(BigDecimal.ZERO) == 0) {
+            return "0";
+        }
+
+        return bd.toPlainString();
     }
 
     public String getEjercicioTexto() {

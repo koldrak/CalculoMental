@@ -1,5 +1,6 @@
 import java.io.*;
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -11,6 +12,9 @@ import javax.script.ScriptException;
 
 public class Generador {
     private static final Pattern PATRON_RANGO = Pattern.compile("\\s*(-?\\d+(?:\\.\\d+)?)[\\s]*-[\\s]*(-?\\d+(?:\\.\\d+)?)(?:\\s*@\\s*(\\d+))?\\s*");
+    private static final int MAX_DECIMALES_VISIBLES = 6;
+    private static final double EPSILON = 1e-9;
+    private static final double EPSILON_ENTERO = 1e-6;
 
     private boolean permitirDecimales = true;
     private boolean permitirNegativos = true;
@@ -20,18 +24,21 @@ public class Generador {
     private boolean permitirParentesis = false;
     private boolean permitirDespejarX = false;
 
- Generador() {
+    Generador() {
         String ruta = System.getProperty("user.dir") + "/";
-        numeros = leerNumeros(ruta + "numeros.txt");
+
+        leerConfig(ruta + "config.txt");
+
+        List<Double> numerosLeidos = leerNumeros(ruta + "numeros.txt");
+        numeros = ajustarDecimalesSegunConfiguracion(numerosLeidos);
         if (numeros.isEmpty()) {
             mostrarErrorNumerosVacios();
         }
+
         simbolos = leerSimbolosDesdeConfig(ruta + "simbolos.txt");
         if (simbolos.isEmpty()) {
             mostrarErrorSimbolosVacios();
         }
-
-        leerConfig(ruta + "config.txt");
     }
 
  public List<Ejercicio> generarEjercicios() {
@@ -56,7 +63,7 @@ public class Generador {
 
             StringBuilder expresion = new StringBuilder();
             double acumulador = numeros.get(r.nextInt(numeros.size()));
-            expresion.append(acumulador);
+            expresion.append(formatearNumero(acumulador));
 
             boolean valido = true;
 
@@ -74,7 +81,7 @@ public class Generador {
                     break;
                 }
 
-                expresion.append(" ").append(operador).append(" ").append(siguiente);
+                expresion.append(" ").append(operador).append(" ").append(formatearNumero(siguiente));
 
                 switch (operador) {
                 case "/":
@@ -107,10 +114,10 @@ public class Generador {
 
                 double resultado = evaluarExpresion(expresionFinal);
 
-                // 🚫 Si no se permiten decimales y el resultado no es exacto, descartar este ejercicio
-                if (!permitirDecimales && resultado != Math.floor(resultado)) continue;
-
-                if (!permitirDecimales) resultado = Math.round(resultado);
+                if (!permitirDecimales) {
+                    if (!esEntero(resultado)) continue;
+                    resultado = normalizarEntero(resultado);
+                }
                 if (!permitirNegativos && resultado < 0) continue;
 
                 return new EjercicioMultiple(expresionFinal, resultado);
@@ -120,24 +127,27 @@ public class Generador {
 
         // Fallback con varias divisiones exactas
         double fallbackAcumulador = numeros.get(r.nextInt(numeros.size()));
+        if (!permitirDecimales) {
+            fallbackAcumulador = seleccionarEnteroDeRespaldo(fallbackAcumulador);
+        }
+
         StringBuilder expr = new StringBuilder(formatearNumero(fallbackAcumulador));
 
         for (int i = 1; i < cantidadOperaciones; i++) {
-            double divisor = 1;
             if (!permitirDecimales) {
-                while (fallbackAcumulador % divisor != 0) {
-                    divisor++;
-                }
+                long acumuladorEntero = (long) normalizarEntero(fallbackAcumulador);
+                long divisorEntero = seleccionarDivisorEntero(acumuladorEntero);
+                expr.append(" / ").append(formatearNumero(divisorEntero));
+                fallbackAcumulador = acumuladorEntero / (double) divisorEntero;
             } else {
-                divisor = numeros.get(r.nextInt(numeros.size()));
-                if (divisor == 0) divisor = 1;
+                double divisor = numeros.get(r.nextInt(numeros.size()));
+                if (Math.abs(divisor) < EPSILON) divisor = 1;
+                expr.append(" / ").append(formatearNumero(divisor));
+                fallbackAcumulador = fallbackAcumulador / divisor;
             }
-
-            expr.append(" / ").append(formatearNumero(divisor));
-            fallbackAcumulador = fallbackAcumulador / divisor;
         }
 
-        double resultado = permitirDecimales ? fallbackAcumulador : Math.round(fallbackAcumulador);
+        double resultado = permitirDecimales ? fallbackAcumulador : normalizarEntero(fallbackAcumulador);
         return new EjercicioMultiple(expr.toString(), resultado);
     }
     
@@ -378,7 +388,7 @@ public class Generador {
             for (double candidato = -50; candidato <= 50; candidato += 0.25) {
                 // Validar candidato antes de evaluar
                 if (!permitirNegativos && candidato < 0) continue;
-                if (!permitirDecimales && candidato != Math.floor(candidato)) continue;
+                if (!permitirDecimales && !esEntero(candidato)) continue;
 
                 // Reemplazar {X} por el candidato
                 List<String> evaluable = new ArrayList<>();
@@ -395,12 +405,12 @@ public class Generador {
 
                 // Validar resultado antes de comparar
                 if (!permitirNegativos && resultado < 0) continue;
-                if (!permitirDecimales && resultado != Math.floor(resultado)) continue;
+                if (!permitirDecimales && !esEntero(resultado)) continue;
 
                 // Comparar con resultado esperado
                 boolean coincide = permitirDecimales
                     ? Math.abs(resultado - resultadoEsperado) < 0.01
-                    : Math.round(resultado) == Math.round(resultadoEsperado);
+                    : Math.abs(normalizarEntero(resultado) - resultadoEsperado) < EPSILON_ENTERO;
 
                 if (coincide) {
                     long conteoX = expr.chars().filter(c -> c == 'X').count();
@@ -415,16 +425,73 @@ public class Generador {
     }
 
     private String formatearNumero(double n) {
-        if (n == Math.floor(n)) {
-            return String.valueOf((int) n); // si es entero, sin decimales
-        } else {
-            double redondeado = Math.round(n * 100.0) / 100.0;
-            if (redondeado == Math.floor(redondeado)) {
-                return String.valueOf((int) redondeado);
-            } else {
-                return String.format("%.2f", redondeado);
+        BigDecimal bd = new BigDecimal(Double.toString(n));
+
+        if (bd.scale() > MAX_DECIMALES_VISIBLES) {
+            bd = bd.setScale(MAX_DECIMALES_VISIBLES, RoundingMode.HALF_UP);
+        }
+
+        bd = bd.stripTrailingZeros();
+
+        if (bd.scale() < 0) {
+            bd = bd.setScale(0);
+        }
+
+        if (bd.compareTo(BigDecimal.ZERO) == 0) {
+            return "0";
+        }
+
+        return bd.toPlainString();
+    }
+
+    private boolean esEntero(double valor) {
+        return Math.abs(valor - Math.rint(valor)) < EPSILON_ENTERO;
+    }
+
+    private double normalizarEntero(double valor) {
+        return Math.rint(valor);
+    }
+
+    private double seleccionarEnteroDeRespaldo(double valorInicial) {
+        List<Double> enteros = new ArrayList<>();
+        for (double numero : numeros) {
+            if (esEntero(numero)) {
+                enteros.add(normalizarEntero(numero));
             }
         }
+
+        if (!enteros.isEmpty()) {
+            return enteros.get(new Random().nextInt(enteros.size()));
+        }
+
+        return normalizarEntero(valorInicial);
+    }
+
+    private List<Double> ajustarDecimalesSegunConfiguracion(List<Double> originales) {
+        if (originales.isEmpty()) {
+            return originales;
+        }
+
+        if (permitirDecimales) {
+            return new ArrayList<>(originales);
+        }
+
+        boolean hayDecimales = false;
+        List<Double> copia = new ArrayList<>(originales.size());
+        for (double valor : originales) {
+            copia.add(valor);
+            if (!hayDecimales && !esEntero(valor)) {
+                hayDecimales = true;
+            }
+        }
+
+        if (hayDecimales) {
+            System.out.println(
+                "numeros.txt contiene valores con decimales. Se conservarán, pero las combinaciones que produzcan resultados no enteros se descartarán porque la opción de decimales está deshabilitada."
+            );
+        }
+
+        return copia;
     }
 
     private List<Double> leerNumeros(String ruta) {
@@ -478,6 +545,21 @@ public class Generador {
         } catch (NumberFormatException ex) {
             return Optional.empty();
         }
+    }
+
+    private long seleccionarDivisorEntero(long valor) {
+        long absoluto = Math.abs(valor);
+        if (absoluto <= 1) {
+            return 1;
+        }
+
+        for (long divisor = 2; divisor <= absoluto; divisor++) {
+            if (absoluto % divisor == 0) {
+                return divisor;
+            }
+        }
+
+        return 1;
     }
 
     private void agregarRango(List<Double> valores, BigDecimal inicioBD, BigDecimal finBD, int decimales, String lineaOriginal) {
