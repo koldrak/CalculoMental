@@ -66,17 +66,27 @@ public class Presentacion {
                 timer.stop();
             }
             panel.setBackground(Color.WHITE);
-            panel.setLayout(new BorderLayout());
+            panel.setLayout(new GridBagLayout());
 
             LocalDate fechaActual = LocalDate.now();
             DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
             String fechaTexto = fechaActual.format(formatter);
 
-            String mensaje = "Antes de comenzar anota la fecha actual \"" + fechaTexto + "\"";
+            String mensaje = "<html><div style='text-align: center;'>Antes de comenzar anota la fecha actual" +
+                    "<br><span style='font-size: 0.9em;'>\"" + fechaTexto + "\"</span></div></html>";
             JLabel introduccion = new JLabel(mensaje, SwingConstants.CENTER);
-            introduccion.setFont(new Font("Arial", Font.BOLD, 70));
+            int fontSizeIntroduccion = calcularTamanioFuente("Antes de comenzar anota la fecha actual \"" + fechaTexto + "\"",
+                    screenWidth * 0.75);
+            introduccion.setFont(new Font("Arial", Font.BOLD, fontSizeIntroduccion));
             introduccion.setForeground(Color.DARK_GRAY);
-            panel.add(introduccion, BorderLayout.CENTER);
+            introduccion.setHorizontalAlignment(SwingConstants.CENTER);
+            introduccion.setVerticalAlignment(SwingConstants.CENTER);
+
+            GridBagConstraints constraints = new GridBagConstraints();
+            constraints.gridx = 0;
+            constraints.gridy = 0;
+            constraints.anchor = GridBagConstraints.CENTER;
+            panel.add(introduccion, constraints);
         } else if (indice < ejercicios.size()) {
             Color fondo = generarColorPastelAleatorio();
             panel.setBackground(fondo);
