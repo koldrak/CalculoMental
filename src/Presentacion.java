@@ -5,6 +5,9 @@ import java.util.List;
 import java.awt.image.BufferedImage;
 import java.util.Random;
 import java.util.ArrayList;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 
 public class Presentacion {
@@ -15,6 +18,7 @@ public class Presentacion {
     private int segundos;
     private int indiceCorreccion = 0;
     private List<JLabel> etiquetasResumen = new ArrayList<>();
+    private boolean enPantallaIntroduccion = true;
 
     public Presentacion(List<Ejercicio> ejercicios) {
         this.ejercicios = ejercicios;
@@ -32,7 +36,10 @@ public class Presentacion {
     }
 
     private void avanzar() {
-        if (indice < ejercicios.size()) {
+        if (enPantallaIntroduccion) {
+            enPantallaIntroduccion = false;
+            mostrarPantalla();
+        } else if (indice < ejercicios.size()) {
             indice++;
             mostrarPantalla();
         } else if (indiceCorreccion < ejercicios.size()) {
@@ -51,17 +58,43 @@ public class Presentacion {
     private void mostrarPantalla() {
         frame.getContentPane().removeAll();
         JPanel panel = new JPanel();
-        Color fondo = (indice < ejercicios.size()) ? generarColorPastelAleatorio() : Color.WHITE;
-        panel.setBackground(fondo);
 
         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
         int screenWidth = screenSize.width;
 
-        if (indice < ejercicios.size()) {
+        if (enPantallaIntroduccion) {
+            if (timer != null) {
+                timer.stop();
+            }
+            panel.setBackground(Color.WHITE);
+            panel.setLayout(new GridBagLayout());
+
+            LocalDate fechaActual = LocalDate.now();
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy", new Locale("es", "ES"));
+            String fechaTexto = fechaActual.format(formatter);
+
+            String mensaje = "<html><div style='text-align: center;'>Antes de comenzar anota la fecha actual" +
+                    "<br><span style='font-size: 0.9em;'>\"" + fechaTexto + "\"</span></div></html>";
+            JLabel introduccion = new JLabel(mensaje, SwingConstants.CENTER);
+            int fontSizeIntroduccion = calcularTamanioFuente("Antes de comenzar anota la fecha actual \"" + fechaTexto + "\"",
+                    screenWidth * 0.75);
+            introduccion.setFont(new Font("Arial", Font.BOLD, fontSizeIntroduccion));
+            introduccion.setForeground(Color.DARK_GRAY);
+            introduccion.setHorizontalAlignment(SwingConstants.CENTER);
+            introduccion.setVerticalAlignment(SwingConstants.CENTER);
+
+            GridBagConstraints constraints = new GridBagConstraints();
+            constraints.gridx = 0;
+            constraints.gridy = 0;
+            constraints.anchor = GridBagConstraints.CENTER;
+            panel.add(introduccion, constraints);
+        } else if (indice < ejercicios.size()) {
+            Color fondo = generarColorPastelAleatorio();
+            panel.setBackground(fondo);
             // Usamos BorderLayout para ubicar cronómetro y ejercicio fácilmente
             panel.setLayout(new BorderLayout());
-            
-         // Panel Norte con título "Ejercicio N" centrado y cronómetro a la izquierda
+
+            // Panel Norte con título "Ejercicio N" centrado y cronómetro a la izquierda
             JPanel panelNorte = new JPanel(new BorderLayout());
             panelNorte.setOpaque(false);
 
@@ -86,8 +119,7 @@ public class Presentacion {
             label.setFont(new Font("Arial", Font.BOLD, fontSize));
             label.setVerticalAlignment(SwingConstants.CENTER);
             panel.add(label, BorderLayout.CENTER);
-        }
-        else {
+        } else {
             panel.setLayout(new GridLayout(ejercicios.size() + 1, 1));
 
             if (timer != null) timer.stop();
@@ -147,17 +179,20 @@ public class Presentacion {
 
     private class Navegacion extends KeyAdapter {
     	public void keyPressed(KeyEvent e) {
-    	    if (e.getKeyCode() == KeyEvent.VK_RIGHT || e.getKeyCode() == KeyEvent.VK_SPACE) {
-    	        avanzar();
-    	    } else if (e.getKeyCode() == KeyEvent.VK_LEFT) {
-    	        if (indice > 0) {
-    	            indice--;
-    	            mostrarPantalla();
-    	        }
-    	    } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
-    	        frame.dispose();
-    	    }
-    	}
+            if (e.getKeyCode() == KeyEvent.VK_RIGHT || e.getKeyCode() == KeyEvent.VK_SPACE) {
+                avanzar();
+            } else if (e.getKeyCode() == KeyEvent.VK_LEFT) {
+                if (indice > 0) {
+                    indice--;
+                    mostrarPantalla();
+                } else if (!enPantallaIntroduccion) {
+                    enPantallaIntroduccion = true;
+                    mostrarPantalla();
+                }
+            } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                frame.dispose();
+            }
+        }
     }
     private Color generarColorPastelAleatorio() {
         Random rand = new Random();
