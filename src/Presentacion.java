@@ -7,6 +7,7 @@ import java.util.Random;
 import java.util.ArrayList;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 
 
 public class Presentacion {
@@ -69,7 +70,7 @@ public class Presentacion {
             panel.setLayout(new GridBagLayout());
 
             LocalDate fechaActual = LocalDate.now();
-            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("dd/MM/yyyy");
+            DateTimeFormatter formatter = DateTimeFormatter.ofPattern("d 'de' MMMM 'de' yyyy", new Locale("es", "ES"));
             String fechaTexto = fechaActual.format(formatter);
 
             String mensaje = "<html><div style='text-align: center;'>Antes de comenzar anota la fecha actual" +
