@@ -5,6 +5,9 @@ import java.util.List;
 import java.awt.image.BufferedImage;
 import java.util.Random;
 import java.util.ArrayList;
+import java.time.LocalDate;
+import java.time.format.TextStyle;
+import java.util.Locale;
 
 
 public class Presentacion {
@@ -17,6 +20,7 @@ public class Presentacion {
     private int indiceCorreccion = 0;
     private int paginaCorreccion = 0;
     private List<JLabel> etiquetasResumen = new ArrayList<>();
+    private boolean introMostrada = false;
 
     public Presentacion(List<Ejercicio> ejercicios) {
         this.ejercicios = ejercicios;
@@ -34,6 +38,15 @@ public class Presentacion {
     }
 
     private void avanzar() {
+        if (!introMostrada) {
+            introMostrada = true;
+            if (timer != null) {
+                timer.stop();
+            }
+            mostrarPantalla();
+            return;
+        }
+
         if (indice < ejercicios.size()) {
             indice++;
             if (indice == ejercicios.size()) {
@@ -73,17 +86,40 @@ public class Presentacion {
     private void mostrarPantalla() {
         frame.getContentPane().removeAll();
         JPanel panel = new JPanel();
-        Color fondo = (indice < ejercicios.size()) ? generarColorPastelAleatorio() : Color.WHITE;
+        Color fondo;
+
+        if (!introMostrada) {
+            fondo = Color.WHITE;
+        } else if (indice < ejercicios.size()) {
+            fondo = generarColorPastelAleatorio();
+        } else {
+            fondo = Color.WHITE;
+        }
+
         panel.setBackground(fondo);
 
         Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
         int screenWidth = screenSize.width;
 
-        if (indice < ejercicios.size()) {
+        if (!introMostrada) {
+            panel.setLayout(new BorderLayout());
+
+            if (timer != null) {
+                timer.stop();
+            }
+
+            JLabel mensaje = new JLabel(
+                    "<html><div style='text-align:center;'>Antes de comenzar anota la fecha actual \""
+                            + obtenerFechaActualTexto() + "\"</div></html>",
+                    SwingConstants.CENTER);
+            mensaje.setFont(new Font("Arial", Font.BOLD, 60));
+            mensaje.setForeground(Color.DARK_GRAY);
+            panel.add(mensaje, BorderLayout.CENTER);
+        } else if (indice < ejercicios.size()) {
             // Usamos BorderLayout para ubicar cronómetro y ejercicio fácilmente
             panel.setLayout(new BorderLayout());
-            
-         // Panel Norte con título "Ejercicio N" centrado y cronómetro a la izquierda
+
+            // Panel Norte con título "Ejercicio N" centrado y cronómetro a la izquierda
             JPanel panelNorte = new JPanel(new BorderLayout());
             panelNorte.setOpaque(false);
 
@@ -108,8 +144,7 @@ public class Presentacion {
             label.setFont(new Font("Arial", Font.BOLD, fontSize));
             label.setVerticalAlignment(SwingConstants.CENTER);
             panel.add(label, BorderLayout.CENTER);
-        }
-        else {
+        } else {
             panel.setLayout(new BorderLayout());
 
             if (timer != null) timer.stop();
@@ -191,18 +226,32 @@ public class Presentacion {
 
     private class Navegacion extends KeyAdapter {
     	public void keyPressed(KeyEvent e) {
-    	    if (e.getKeyCode() == KeyEvent.VK_RIGHT || e.getKeyCode() == KeyEvent.VK_SPACE) {
-    	        avanzar();
-    	    } else if (e.getKeyCode() == KeyEvent.VK_LEFT) {
-    	        if (indice > 0) {
-    	            indice--;
-    	            mostrarPantalla();
-    	        }
-    	    } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
-    	        frame.dispose();
-    	    }
-    	}
+            if (e.getKeyCode() == KeyEvent.VK_RIGHT || e.getKeyCode() == KeyEvent.VK_SPACE) {
+                avanzar();
+            } else if (e.getKeyCode() == KeyEvent.VK_LEFT) {
+                if (indice > 0) {
+                    indice--;
+                    mostrarPantalla();
+                } else if (introMostrada) {
+                    introMostrada = false;
+                    if (timer != null) {
+                        timer.stop();
+                    }
+                    mostrarPantalla();
+                }
+            } else if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
+                frame.dispose();
+            }
+        }
     }
+
+    private String obtenerFechaActualTexto() {
+        LocalDate hoy = LocalDate.now();
+        Locale localeEspanol = new Locale("es", "ES");
+        String mes = hoy.getMonth().getDisplayName(TextStyle.FULL, localeEspanol).toLowerCase(localeEspanol);
+        return hoy.getDayOfMonth() + " de " + mes + " de " + hoy.getYear();
+    }
+
     private Color generarColorPastelAleatorio() {
         Random rand = new Random();
         int r = 180 + rand.nextInt(76); // 180 a 255
