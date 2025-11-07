@@ -1,10 +1,16 @@
 public class EjercicioMultiple extends Ejercicio {
     private final String texto;
+    private final boolean esDespejarX;
 
     public EjercicioMultiple(String expresionOriginal, double resultado) {
+        this(expresionOriginal, resultado, false);
+    }
+
+    public EjercicioMultiple(String expresionOriginal, double resultado, boolean esDespejarX) {
         super(0, 0, "", resultado); // no usamos a ni b ni operador
         this.texto = formatearExpresion(expresionOriginal);
         this.resultado = resultado;
+        this.esDespejarX = esDespejarX;
     }
 
     @Override
@@ -15,6 +21,9 @@ public class EjercicioMultiple extends Ejercicio {
 
     @Override
     public String getResultadoTexto() {
+        if (esDespejarX) {
+            return "X = " + formatearNumero(resultado);
+        }
         return texto + " = " + formatearNumero(resultado);
     }
 
