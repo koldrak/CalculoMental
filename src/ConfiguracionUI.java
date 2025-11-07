@@ -40,6 +40,7 @@ public class ConfiguracionUI {
         JCheckBox chkDivision = new JCheckBox("División");
 
         JTextField txtCantidadOperaciones = new JTextField();
+        JSpinner spnCantidadEjercicios = new JSpinner(new SpinnerNumberModel(7, 1, 100, 1));
 
         List<RangoNumero> numerosDisponibles = leerNumerosComoLista(NUMEROS_PATH);
         NumerosTableModel numerosModel = new NumerosTableModel(frame, numerosDisponibles);
@@ -55,6 +56,12 @@ public class ConfiguracionUI {
         chkDespejarX.setSelected("SI".equalsIgnoreCase(config.getOrDefault("DESPEJAR_X", "NO")));
 
         txtCantidadOperaciones.setText(config.getOrDefault("OPERACIONES POR EJERCICIO", "2"));
+        try {
+            int cantidad = Integer.parseInt(config.getOrDefault("CANTIDAD EJERCICIOS", "7"));
+            spnCantidadEjercicios.setValue(Math.max(1, cantidad));
+        } catch (NumberFormatException e1) {
+            spnCantidadEjercicios.setValue(7);
+        }
 
         Map<String, String> simbolos = leerArchivoComoMapa(SIMBOLOS_PATH);
         chkSuma.setSelected("SI".equalsIgnoreCase(simbolos.getOrDefault("SUMA", "NO")));
@@ -81,10 +88,12 @@ public class ConfiguracionUI {
         opcionesPanel.add(chkDivision);
         opcionesPanel.add(new JLabel("Cantidad de operaciones por ejercicio:"));
         opcionesPanel.add(txtCantidadOperaciones);
+        opcionesPanel.add(new JLabel("Cantidad de ejercicios:"));
+        opcionesPanel.add(spnCantidadEjercicios);
 
         JButton btnGuardar = new JButton("Guardar Cambios");
         btnGuardar.addActionListener(e -> {
-        	guardarConfig(chkDecimales, chkNegativos, chkParentesis, chkDespejarX, txtCantidadOperaciones.getText());
+                guardarConfig(chkDecimales, chkNegativos, chkParentesis, chkDespejarX, txtCantidadOperaciones.getText(), (Integer) spnCantidadEjercicios.getValue());
             guardarSimbolos(chkSuma, chkResta, chkMultiplicacion, chkDivision);
             guardarNumeros(numerosModel);
 
@@ -171,14 +180,14 @@ public class ConfiguracionUI {
         return sb.toString();
     }
 
-    private static void guardarConfig(JCheckBox dec, JCheckBox neg, JCheckBox par, JCheckBox despejarX, String cantOperaciones) {
+    private static void guardarConfig(JCheckBox dec, JCheckBox neg, JCheckBox par, JCheckBox despejarX, String cantOperaciones, int cantidadEjercicios) {
         try (PrintWriter pw = new PrintWriter(new FileWriter(CONFIG_PATH))) {
             pw.println("DECIMALES: " + (dec.isSelected() ? "SI" : "NO"));
             pw.println("NUMEROS NEGATIVOS: " + (neg.isSelected() ? "SI" : "NO"));
             pw.println("PARENTESIS: " + (par.isSelected() ? "SI" : "NO"));
             pw.println("DESPEJAR_X: " + (despejarX.isSelected() ? "SI" : "NO"));
-
             pw.println("OPERACIONES POR EJERCICIO: " + cantOperaciones.trim());
+            pw.println("CANTIDAD EJERCICIOS: " + cantidadEjercicios);
         } catch (IOException e) {
             System.out.println("Error al guardar config.txt");
         }

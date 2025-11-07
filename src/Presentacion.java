@@ -8,12 +8,14 @@ import java.util.ArrayList;
 
 
 public class Presentacion {
+    private static final int EJERCICIOS_POR_HOJA = 7;
     private JFrame frame;
     private List<Ejercicio> ejercicios;
     private int indice = 0;
     private Timer timer;
     private int segundos;
     private int indiceCorreccion = 0;
+    private int paginaCorreccion = 0;
     private List<JLabel> etiquetasResumen = new ArrayList<>();
 
     public Presentacion(List<Ejercicio> ejercicios) {
@@ -34,11 +36,31 @@ public class Presentacion {
     private void avanzar() {
         if (indice < ejercicios.size()) {
             indice++;
+            if (indice == ejercicios.size()) {
+                paginaCorreccion = 0;
+                indiceCorreccion = 0;
+            }
             mostrarPantalla();
         } else if (indiceCorreccion < ejercicios.size()) {
-            JLabel etiqueta = etiquetasResumen.get(indiceCorreccion);
-            etiqueta.setText(ejercicios.get(indiceCorreccion).getResultadoTexto());
+            int paginaDeIndice = indiceCorreccion / EJERCICIOS_POR_HOJA;
+            if (paginaDeIndice != paginaCorreccion) {
+                paginaCorreccion = paginaDeIndice;
+                mostrarPantalla();
+            }
+
+            int indiceEnPagina = indiceCorreccion % EJERCICIOS_POR_HOJA;
+            if (indiceEnPagina < etiquetasResumen.size()) {
+                etiquetasResumen.get(indiceEnPagina).setText(ejercicios.get(indiceCorreccion).getResultadoTexto());
+            }
             indiceCorreccion++;
+
+            if (indiceCorreccion < ejercicios.size()) {
+                int siguientePagina = indiceCorreccion / EJERCICIOS_POR_HOJA;
+                if (siguientePagina != paginaCorreccion) {
+                    paginaCorreccion = siguientePagina;
+                    mostrarPantalla();
+                }
+            }
         }
     }
 
@@ -88,22 +110,44 @@ public class Presentacion {
             panel.add(label, BorderLayout.CENTER);
         }
         else {
-            panel.setLayout(new GridLayout(ejercicios.size() + 1, 1));
+            panel.setLayout(new BorderLayout());
 
             if (timer != null) timer.stop();
 
             JLabel titulo = new JLabel("Corrección", SwingConstants.CENTER);
             titulo.setFont(new Font("Arial", Font.BOLD, 60));
-            panel.add(titulo);
+            panel.add(titulo, BorderLayout.NORTH);
 
             etiquetasResumen.clear();
-            indiceCorreccion = 0;
 
-            for (Ejercicio ej : ejercicios) {
-                JLabel etiqueta = new JLabel(ej.getEjercicioTexto(), SwingConstants.CENTER);
+            int totalPaginas = Math.max(1, (int) Math.ceil((double) ejercicios.size() / EJERCICIOS_POR_HOJA));
+            paginaCorreccion = Math.min(paginaCorreccion, totalPaginas - 1);
+
+            JPanel hojaPanel = new JPanel(new GridLayout(EJERCICIOS_POR_HOJA, 1));
+            int inicio = paginaCorreccion * EJERCICIOS_POR_HOJA;
+            int fin = Math.min(inicio + EJERCICIOS_POR_HOJA, ejercicios.size());
+
+            for (int i = inicio; i < fin; i++) {
+                boolean resuelto = i < indiceCorreccion;
+                String texto = resuelto ? ejercicios.get(i).getResultadoTexto() : ejercicios.get(i).getEjercicioTexto();
+                JLabel etiqueta = new JLabel(texto, SwingConstants.CENTER);
                 etiqueta.setFont(new Font("Arial", Font.PLAIN, 50));
                 etiquetasResumen.add(etiqueta);
-                panel.add(etiqueta);
+                hojaPanel.add(etiqueta);
+            }
+
+            for (int i = fin; i < inicio + EJERCICIOS_POR_HOJA; i++) {
+                JLabel relleno = new JLabel("", SwingConstants.CENTER);
+                relleno.setFont(new Font("Arial", Font.PLAIN, 50));
+                hojaPanel.add(relleno);
+            }
+
+            panel.add(hojaPanel, BorderLayout.CENTER);
+
+            if (totalPaginas > 1) {
+                JLabel indicador = new JLabel("Hoja " + (paginaCorreccion + 1) + " de " + totalPaginas, SwingConstants.CENTER);
+                indicador.setFont(new Font("Arial", Font.ITALIC, 30));
+                panel.add(indicador, BorderLayout.SOUTH);
             }
         }
 
