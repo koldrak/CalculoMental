@@ -44,13 +44,28 @@ public class Generador {
 
     public List<Ejercicio> generarEjercicios() {
         List<Ejercicio> lista = new ArrayList<>();
-        for (int i = 0; i < cantidadEjercicios; i++) {
-            if (permitirDespejarX) {
-                lista.add(generarEjercicioDespejarX());
-            } else {
+
+        if (!permitirDespejarX) {
+            for (int i = 0; i < cantidadEjercicios; i++) {
                 lista.add(generarEjercicio());
             }
+            return lista;
         }
+
+        int minEjerciciosDespejarX = (int) Math.ceil(cantidadEjercicios / 2.0);
+        List<Ejercicio> ejerciciosDespejarX = generarEjerciciosDespejarX(minEjerciciosDespejarX);
+
+        while (ejerciciosDespejarX.size() < minEjerciciosDespejarX) {
+            ejerciciosDespejarX.add(generarEjercicioDespejarXSimple());
+        }
+
+        lista.addAll(ejerciciosDespejarX);
+
+        while (lista.size() < cantidadEjercicios) {
+            lista.add(generarEjercicio());
+        }
+
+        Collections.shuffle(lista);
         return lista;
     }
 
@@ -328,6 +343,22 @@ public class Generador {
         return stack.pop();
     }
 
+    private List<Ejercicio> generarEjerciciosDespejarX(int cantidadNecesaria) {
+        List<Ejercicio> ejercicios = new ArrayList<>();
+        int intentos = 0;
+        int maxIntentos = Math.max(100, cantidadNecesaria * 15);
+
+        while (ejercicios.size() < cantidadNecesaria && intentos < maxIntentos) {
+            intentos++;
+            Ejercicio ejercicio = generarEjercicioDespejarX();
+            if (ejercicio instanceof EjercicioMultiple && ((EjercicioMultiple) ejercicio).esDespejarX()) {
+                ejercicios.add(ejercicio);
+            }
+        }
+
+        return ejercicios;
+    }
+
     private Ejercicio generarEjercicioDespejarX() {
         Random r = new Random();
         int intentos = 0;
@@ -421,8 +452,26 @@ public class Generador {
                 }
             }
         }
-        // Si falla tras 100 intentos, generar un ejercicio numérico normal
-        return generarEjercicio();
+        // Si falla tras 100 intentos, generar un ejercicio de despejar X simple
+        return generarEjercicioDespejarXSimple();
+    }
+
+    private Ejercicio generarEjercicioDespejarXSimple() {
+        double solucion = ajustarNumeroSegunConfiguracion(getRandomNumero());
+        double constante = ajustarNumeroSegunConfiguracion(getRandomNumero());
+
+        if (!permitirNegativos) {
+            solucion = Math.abs(solucion);
+            constante = Math.abs(constante);
+        }
+
+        double resultado = solucion + constante;
+        if (!permitirDecimales) {
+            resultado = normalizarEntero(resultado);
+        }
+
+        String expresion = "x + " + formatearNumero(constante) + " = " + formatearNumero(resultado);
+        return new EjercicioMultiple(expresion, solucion, true);
     }
 
     private String formatearNumero(double n) {
@@ -451,6 +500,13 @@ public class Generador {
 
     private double normalizarEntero(double valor) {
         return Math.rint(valor);
+    }
+
+    private double ajustarNumeroSegunConfiguracion(double valor) {
+        if (!permitirDecimales) {
+            valor = normalizarEntero(valor);
+        }
+        return valor;
     }
 
     private double seleccionarEnteroDeRespaldo(double valorInicial) {

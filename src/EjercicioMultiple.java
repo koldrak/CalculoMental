@@ -27,6 +27,10 @@ public class EjercicioMultiple extends Ejercicio {
         return texto + " = " + formatearNumero(resultado);
     }
 
+    public boolean esDespejarX() {
+        return esDespejarX;
+    }
+
     private String formatearExpresion(String expresion) {
         String[] tokens = expresion.split(" ");
         StringBuilder sb = new StringBuilder();
