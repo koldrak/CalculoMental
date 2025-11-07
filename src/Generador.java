@@ -23,6 +23,7 @@ public class Generador {
     private int cantidadOperaciones =2;
     private boolean permitirParentesis = false;
     private boolean permitirDespejarX = false;
+    private int cantidadEjercicios = 7;
 
     Generador() {
         String ruta = System.getProperty("user.dir") + "/";
@@ -41,17 +42,17 @@ public class Generador {
         }
     }
 
- public List<Ejercicio> generarEjercicios() {
-	    List<Ejercicio> lista = new ArrayList<>();
-	    for (int i = 2; i <= 8; i++) {
-	        if (permitirDespejarX) {
-	            lista.add(generarEjercicioDespejarX());
-	        } else {
-	            lista.add(generarEjercicio());
-	        }
-	    }
-	    return lista;
-	}
+    public List<Ejercicio> generarEjercicios() {
+        List<Ejercicio> lista = new ArrayList<>();
+        for (int i = 0; i < cantidadEjercicios; i++) {
+            if (permitirDespejarX) {
+                lista.add(generarEjercicioDespejarX());
+            } else {
+                lista.add(generarEjercicio());
+            }
+        }
+        return lista;
+    }
 
 
     private Ejercicio generarEjercicio() {
@@ -679,9 +680,15 @@ public class Generador {
                     } catch (NumberFormatException e) {
                         cantidadOperaciones = 2;
                     }
+                } else if (linea.startsWith("CANTIDAD EJERCICIOS:")) {
+                    try {
+                        cantidadEjercicios = Math.max(1, Integer.parseInt(valor));
+                    } catch (NumberFormatException e) {
+                        cantidadEjercicios = 7;
+                    }
                 } else if (linea.startsWith("PARENTESIS:")) {
                     permitirParentesis = valor.equals("SI");
-                    
+
                 }else if (linea.startsWith("DESPEJAR_X:")) {
                     permitirDespejarX = valor.equals("SI");
                 }
