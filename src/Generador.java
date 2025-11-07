@@ -59,7 +59,7 @@ public class Generador {
         Random r = new Random();
         int intentos = 0;
 
-        while (intentos < 100) {
+        while (intentos < 1000) {
             intentos++;
 
             StringBuilder expresion = new StringBuilder();
@@ -742,3 +742,4 @@ public class Generador {
         return cercano;
     }
 }
+
