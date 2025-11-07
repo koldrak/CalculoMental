@@ -414,9 +414,9 @@ public class Generador {
                     : Math.abs(normalizarEntero(resultado) - resultadoEsperado) < EPSILON_ENTERO;
 
                 if (coincide) {
-                    long conteoX = expr.chars().filter(c -> c == 'X').count();
+                    long conteoX = expr.chars().filter(c -> c == 'x' || c == 'X').count();
                     if (conteoX == 1) {
-                        return new EjercicioMultiple(expr + " = " + formatearNumero(resultadoEsperado), candidato);
+                        return new EjercicioMultiple(expr + " = " + formatearNumero(resultadoEsperado), candidato, true);
                     }
                 }
             }
