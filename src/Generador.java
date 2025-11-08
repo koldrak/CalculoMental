@@ -44,13 +44,28 @@ public class Generador {
 
     public List<Ejercicio> generarEjercicios() {
         List<Ejercicio> lista = new ArrayList<>();
-        for (int i = 0; i < cantidadEjercicios; i++) {
-            if (permitirDespejarX) {
-                lista.add(generarEjercicioDespejarX());
-            } else {
+
+        if (!permitirDespejarX) {
+            for (int i = 0; i < cantidadEjercicios; i++) {
                 lista.add(generarEjercicio());
             }
+            return lista;
         }
+
+        int minEjerciciosDespejarX = (int) Math.ceil(cantidadEjercicios / 2.0);
+        List<Ejercicio> ejerciciosDespejarX = generarEjerciciosDespejarX(minEjerciciosDespejarX);
+
+        while (ejerciciosDespejarX.size() < minEjerciciosDespejarX) {
+            ejerciciosDespejarX.add(generarEjercicioDespejarXSimple());
+        }
+
+        lista.addAll(ejerciciosDespejarX);
+
+        while (lista.size() < cantidadEjercicios) {
+            lista.add(generarEjercicio());
+        }
+
+        Collections.shuffle(lista);
         return lista;
     }
 
@@ -328,6 +343,22 @@ public class Generador {
         return stack.pop();
     }
 
+    private List<Ejercicio> generarEjerciciosDespejarX(int cantidadNecesaria) {
+        List<Ejercicio> ejercicios = new ArrayList<>();
+        int intentos = 0;
+        int maxIntentos = Math.max(100, cantidadNecesaria * 15);
+
+        while (ejercicios.size() < cantidadNecesaria && intentos < maxIntentos) {
+            intentos++;
+            Ejercicio ejercicio = generarEjercicioDespejarX();
+            if (ejercicio instanceof EjercicioMultiple && ((EjercicioMultiple) ejercicio).esDespejarX()) {
+                ejercicios.add(ejercicio);
+            }
+        }
+
+        return ejercicios;
+    }
+
     private Ejercicio generarEjercicioDespejarX() {
         Random r = new Random();
         int intentos = 0;
@@ -336,16 +367,16 @@ public class Generador {
             intentos++;
 
             List<String> tokens = new ArrayList<>();
-            int xIndex = -1;
+            boolean tieneX = false;
 
             // Construir expresión base
             for (int i = 0; i < cantidadOperaciones * 2 + 1; i++) {
                 if (i % 2 == 0) {
                     // Posición de número
                     String valor;
-                    if (xIndex == -1 && r.nextDouble() < 0.4) { // con 40% de probabilidad insertar la incógnita
+                    if (!tieneX && r.nextDouble() < 0.4) { // con 40% de probabilidad insertar la incógnita
                         valor = "x";
-                        xIndex = i;
+                        tieneX = true;
                     } else {
                         valor = formatearNumero(getRandomNumero());
                     }
@@ -356,11 +387,11 @@ public class Generador {
                 }
             }
 
-            if (xIndex == -1) {
+            if (!tieneX) {
                 // Asegurar al menos una X
                 int index = r.nextInt(cantidadOperaciones + 1) * 2;
                 tokens.set(index, "x");
-                xIndex = index;
+                tieneX = true;
             }
 
             // Generar expresión en texto
@@ -369,33 +400,35 @@ public class Generador {
                 expr = insertarParentesis(expr);
             }
 
+            long conteoX = expr.chars().filter(c -> c == 'x' || c == 'X').count();
+            if (conteoX != 1) {
+                continue;
+            }
+
             // Sustituir la X por una variable temporal para evaluar
             List<String> conX = new ArrayList<>(Arrays.asList(expr.split(" ")));
-
-            // Sustituimos la X por una variable temporal que luego cambiaremos por un número de prueba
             for (int i = 0; i < conX.size(); i++) {
                 if (conX.get(i).equalsIgnoreCase("x")) {
                     conX.set(i, "{X}");
                 }
             }
 
-         // Probar con distintos valores de X para encontrar uno que cumpla
-            double min = numeros.stream().mapToDouble(Double::doubleValue).min().orElse(-10);
-            double max = numeros.stream().mapToDouble(Double::doubleValue).max().orElse(10);
+            List<Double> candidatos = generarCandidatosParaX();
+            Collections.shuffle(candidatos, r);
 
-            // Tomamos un número entero como resultado objetivo
-            double resultadoEsperado = Math.round(min + r.nextDouble() * (max - min));
+            for (double candidato : candidatos) {
+                double valorCandidato = permitirDecimales ? candidato : normalizarEntero(candidato);
+                if (!permitirNegativos && valorCandidato < 0) {
+                    continue;
+                }
+                if (!permitirDecimales && !esEntero(valorCandidato)) {
+                    continue;
+                }
 
-            for (double candidato = -50; candidato <= 50; candidato += 0.25) {
-                // Validar candidato antes de evaluar
-                if (!permitirNegativos && candidato < 0) continue;
-                if (!permitirDecimales && !esEntero(candidato)) continue;
-
-                // Reemplazar {X} por el candidato
-                List<String> evaluable = new ArrayList<>();
+                List<String> evaluable = new ArrayList<>(conX.size());
                 for (String token : conX) {
                     if (token.equals("{X}")) {
-                        evaluable.add(formatearNumero(candidato));
+                        evaluable.add(formatearNumero(valorCandidato));
                     } else {
                         evaluable.add(token);
                     }
@@ -404,25 +437,76 @@ public class Generador {
                 String evaluableExpr = String.join(" ", evaluable);
                 double resultado = evaluarExpresion(evaluableExpr);
 
-                // Validar resultado antes de comparar
-                if (!permitirNegativos && resultado < 0) continue;
-                if (!permitirDecimales && !esEntero(resultado)) continue;
-
-                // Comparar con resultado esperado
-                boolean coincide = permitirDecimales
-                    ? Math.abs(resultado - resultadoEsperado) < 0.01
-                    : Math.abs(normalizarEntero(resultado) - resultadoEsperado) < EPSILON_ENTERO;
-
-                if (coincide) {
-                    long conteoX = expr.chars().filter(c -> c == 'x' || c == 'X').count();
-                    if (conteoX == 1) {
-                        return new EjercicioMultiple(expr + " = " + formatearNumero(resultadoEsperado), candidato, true);
-                    }
+                if (!Double.isFinite(resultado)) {
+                    continue;
                 }
+                if (!permitirNegativos && resultado < 0) {
+                    continue;
+                }
+                if (!permitirDecimales && !esEntero(resultado)) {
+                    continue;
+                }
+
+                double resultadoFinal = permitirDecimales ? resultado : normalizarEntero(resultado);
+                double solucion = permitirDecimales ? valorCandidato : normalizarEntero(valorCandidato);
+
+                return new EjercicioMultiple(expr + " = " + formatearNumero(resultadoFinal), solucion, true);
             }
         }
-        // Si falla tras 100 intentos, generar un ejercicio numérico normal
-        return generarEjercicio();
+
+        // Si falla tras 100 intentos, generar un ejercicio de despejar X simple
+        return generarEjercicioDespejarXSimple();
+    }
+
+    private List<Double> generarCandidatosParaX() {
+        Set<Double> candidatos = new LinkedHashSet<>();
+
+        for (double numero : numeros) {
+            double ajustado = ajustarNumeroSegunConfiguracion(numero);
+            if (!permitirNegativos && ajustado < 0) {
+                continue;
+            }
+            if (!permitirDecimales && !esEntero(ajustado)) {
+                continue;
+            }
+            candidatos.add(ajustado);
+        }
+
+        double paso = permitirDecimales ? 0.25 : 1.0;
+        for (double candidato = -50; candidato <= 50; candidato += paso) {
+            double ajustado = permitirDecimales ? candidato : normalizarEntero(candidato);
+            if (!permitirNegativos && ajustado < 0) {
+                continue;
+            }
+            if (!permitirDecimales && !esEntero(ajustado)) {
+                continue;
+            }
+            candidatos.add(ajustado);
+        }
+
+        if (candidatos.isEmpty()) {
+            candidatos.add(0.0);
+        }
+
+        return new ArrayList<>(candidatos);
+    }
+
+    private Ejercicio generarEjercicioDespejarXSimple() {
+        double solucion = ajustarNumeroSegunConfiguracion(getRandomNumero());
+        double constante = ajustarNumeroSegunConfiguracion(getRandomNumero());
+
+        if (!permitirNegativos) {
+            solucion = Math.abs(solucion);
+            constante = Math.abs(constante);
+        }
+
+        double resultado = solucion + constante;
+        if (!permitirDecimales) {
+            resultado = normalizarEntero(resultado);
+        }
+
+        String expresion = "x + " + formatearNumero(constante) + " = " + formatearNumero(resultado);
+        return new EjercicioMultiple(expresion, solucion, true);
     }
 
     private String formatearNumero(double n) {
@@ -451,6 +535,13 @@ public class Generador {
 
     private double normalizarEntero(double valor) {
         return Math.rint(valor);
+    }
+
+    private double ajustarNumeroSegunConfiguracion(double valor) {
+        if (!permitirDecimales) {
+            valor = normalizarEntero(valor);
+        }
+        return valor;
     }
 
     private double seleccionarEnteroDeRespaldo(double valorInicial) {
