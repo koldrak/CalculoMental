@@ -22,7 +22,7 @@ public class EditorNivelesDificultadDialog extends JDialog {
         tabla.setRowHeight(26);
         tabla.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
         tabla.getColumnModel().getColumn(0).setPreferredWidth(220);
-        tabla.getColumnModel().getColumn(5).setPreferredWidth(160);
+        tabla.getColumnModel().getColumn(10).setPreferredWidth(220);
 
         JScrollPane scrollPane = new JScrollPane(tabla);
         scrollPane.setPreferredSize(new Dimension(650, 220));
@@ -76,13 +76,29 @@ public class EditorNivelesDificultadDialog extends JDialog {
                 mostrarError("La cantidad de operaciones debe ser un entero positivo.");
                 return;
             }
-            Integer maximoNumero = parseEntero(editable.maximoNumero, "número máximo");
-            if (maximoNumero == null || maximoNumero <= 0) {
-                mostrarError("El número máximo debe ser un entero positivo.");
+            Integer cantidadEjercicios = parseEntero(editable.cantidadEjercicios, "cantidad de ejercicios");
+            if (cantidadEjercicios == null || cantidadEjercicios <= 0) {
+                mostrarError("La cantidad de ejercicios debe ser un entero positivo.");
                 return;
             }
             if (minimo > maximo) {
                 mostrarError("El mínimo no puede ser mayor que el máximo para " + descripcion + ".");
+                return;
+            }
+            Boolean permitirDecimales = parseBooleano(editable.decimales, "decimales");
+            if (permitirDecimales == null) {
+                return;
+            }
+            Boolean permitirNegativos = parseBooleano(editable.negativos, "números negativos");
+            if (permitirNegativos == null) {
+                return;
+            }
+            Boolean permitirParentesis = parseBooleano(editable.parentesis, "paréntesis");
+            if (permitirParentesis == null) {
+                return;
+            }
+            Boolean permitirDespejarX = parseBooleano(editable.despejarX, "despejar X");
+            if (permitirDespejarX == null) {
                 return;
             }
             String[] operadores = parseOperadores(editable.operadores);
@@ -90,7 +106,21 @@ public class EditorNivelesDificultadDialog extends JDialog {
                 mostrarError("Debes especificar al menos un operador para " + descripcion + ".");
                 return;
             }
-            niveles.add(new NivelDificultad(descripcion, minimo, maximo, cantidadOperaciones, maximoNumero, operadores));
+            String definicionNumeros = editable.numeros.trim();
+            List<Double> numeros;
+            try {
+                numeros = NivelDificultad.parsearDefinicionNumeros(definicionNumeros, false);
+            } catch (IllegalArgumentException ex) {
+                mostrarError("Error en números para " + descripcion + ": " + ex.getMessage());
+                return;
+            }
+            if (numeros.isEmpty()) {
+                mostrarError("Debes definir al menos un número o rango para " + descripcion + ".");
+                return;
+            }
+            niveles.add(new NivelDificultad(descripcion, minimo, maximo, cantidadOperaciones,
+                    cantidadEjercicios, permitirDecimales, permitirNegativos, permitirParentesis,
+                    permitirDespejarX, operadores, definicionNumeros));
         }
 
         if (niveles.isEmpty()) {
@@ -135,13 +165,27 @@ public class EditorNivelesDificultadDialog extends JDialog {
         return operadores.toArray(new String[0]);
     }
 
+    private Boolean parseBooleano(String valor, String campo) {
+        String normalizado = valor.trim().toUpperCase();
+        if (normalizado.equals("SI")) {
+            return Boolean.TRUE;
+        }
+        if (normalizado.equals("NO")) {
+            return Boolean.FALSE;
+        }
+        mostrarError("El campo " + campo + " debe contener SI o NO.");
+        return null;
+    }
+
     private void mostrarError(String mensaje) {
         JOptionPane.showMessageDialog(this, mensaje, "Error", JOptionPane.ERROR_MESSAGE);
     }
 
     private static class NivelesTableModel extends AbstractTableModel {
         private static final String[] COLUMNAS = {
-                "Descripción", "Mínimo", "Máximo", "Operaciones", "Número máximo", "Operadores"
+                "Descripción", "Mínimo", "Máximo", "Operaciones", "Ejercicios",
+                "Decimales (SI/NO)", "Negativos (SI/NO)", "Paréntesis (SI/NO)",
+                "Despejar X (SI/NO)", "Operadores", "Números (separar con ;)"
         };
         private final List<NivelEditable> niveles;
 
@@ -197,9 +241,19 @@ public class EditorNivelesDificultadDialog extends JDialog {
                 case 3:
                     return editable.cantidadOperaciones;
                 case 4:
-                    return editable.maximoNumero;
+                    return editable.cantidadEjercicios;
                 case 5:
+                    return editable.decimales;
+                case 6:
+                    return editable.negativos;
+                case 7:
+                    return editable.parentesis;
+                case 8:
+                    return editable.despejarX;
+                case 9:
                     return editable.operadores;
+                case 10:
+                    return editable.numeros;
                 default:
                     return "";
             }
@@ -223,10 +277,25 @@ public class EditorNivelesDificultadDialog extends JDialog {
                     editable.cantidadOperaciones = valor;
                     break;
                 case 4:
-                    editable.maximoNumero = valor;
+                    editable.cantidadEjercicios = valor;
                     break;
                 case 5:
+                    editable.decimales = valor;
+                    break;
+                case 6:
+                    editable.negativos = valor;
+                    break;
+                case 7:
+                    editable.parentesis = valor;
+                    break;
+                case 8:
+                    editable.despejarX = valor;
+                    break;
+                case 9:
                     editable.operadores = valor;
+                    break;
+                case 10:
+                    editable.numeros = valor;
                     break;
                 default:
                     break;
@@ -245,16 +314,26 @@ public class EditorNivelesDificultadDialog extends JDialog {
         String minimo;
         String maximo;
         String cantidadOperaciones;
-        String maximoNumero;
+        String cantidadEjercicios;
+        String decimales;
+        String negativos;
+        String parentesis;
+        String despejarX;
         String operadores;
+        String numeros;
 
         NivelEditable() {
             this.descripcion = "Nuevo nivel";
             this.minimo = "0";
             this.maximo = "0";
             this.cantidadOperaciones = "1";
-            this.maximoNumero = "10";
+            this.cantidadEjercicios = "5";
+            this.decimales = "NO";
+            this.negativos = "NO";
+            this.parentesis = "NO";
+            this.despejarX = "NO";
             this.operadores = "+";
+            this.numeros = "1-10";
         }
 
         NivelEditable(NivelDificultad nivel) {
@@ -262,8 +341,13 @@ public class EditorNivelesDificultadDialog extends JDialog {
             this.minimo = String.valueOf(nivel.getMinimo());
             this.maximo = String.valueOf(nivel.getMaximo());
             this.cantidadOperaciones = String.valueOf(nivel.getCantidadOperaciones());
-            this.maximoNumero = String.valueOf(nivel.getMaximoNumero());
+            this.cantidadEjercicios = String.valueOf(nivel.getCantidadEjercicios());
+            this.decimales = nivel.isPermitirDecimales() ? "SI" : "NO";
+            this.negativos = nivel.isPermitirNegativos() ? "SI" : "NO";
+            this.parentesis = nivel.isPermitirParentesis() ? "SI" : "NO";
+            this.despejarX = nivel.isPermitirDespejarX() ? "SI" : "NO";
             this.operadores = nivel.getOperadoresComoCadena();
+            this.numeros = nivel.getDefinicionNumeros();
         }
     }
 }

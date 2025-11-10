@@ -6,10 +6,8 @@ import java.awt.event.WindowAdapter;
 import java.awt.event.WindowEvent;
 import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Random;
 
 public class ModoDificultadInteligente {
-    private final Random random = new Random();
     private JFrame frame;
     private JLabel lblProgreso;
     private JLabel lblNivel;
@@ -27,8 +25,14 @@ public class ModoDificultadInteligente {
     public void iniciar() {
         LinkedHashMap<String, String> config = ConfigFileHelper.leerConfig();
         gradoDificultad = parseEntero(config.getOrDefault("GRADO_DIFICULTAD", "0"), 0);
-        ejerciciosTotales = parseEntero(config.getOrDefault("CANTIDAD EJERCICIOS", "7"), 7);
         gradoDificultad = NivelDificultad.clampGrado(gradoDificultad);
+
+        NivelDificultad nivelInicial = NivelDificultad.desdeGrado(gradoDificultad);
+        if (nivelInicial != null) {
+            ejerciciosTotales = nivelInicial.getCantidadEjercicios();
+        } else {
+            ejerciciosTotales = parseEntero(config.getOrDefault("CANTIDAD EJERCICIOS", "7"), 7);
+        }
 
         construirUI();
         mostrarSiguienteEjercicio();
@@ -115,6 +119,9 @@ public class ModoDificultadInteligente {
             return;
         }
         ejercicioActual = generarEjercicio(nivelActual);
+        if (ejercicioActual == null) {
+            return;
+        }
 
         lblProgreso.setText("Ejercicio " + (ejerciciosCompletados + 1) + " de " + ejerciciosTotales);
         lblNivel.setText(descripcionNivel(nivelActual));
@@ -131,31 +138,16 @@ public class ModoDificultadInteligente {
     }
 
     private EjercicioMultiple generarEjercicio(NivelDificultad nivel) {
-        int cantidadNumeros = nivel.getCantidadOperaciones();
-        int maximoNumero = nivel.getMaximoNumero();
-        String[] operadores = nivel.getOperadoresPermitidos();
-
-        StringBuilder expresion = new StringBuilder();
-        int numeroInicial = numeroAleatorio(1, maximoNumero);
-        expresion.append(numeroInicial);
-        double resultado = numeroInicial;
-
-        for (int i = 1; i < cantidadNumeros; i++) {
-            String operador = operadores[random.nextInt(operadores.length)];
-            int siguiente = numeroAleatorio(1, maximoNumero);
-            expresion.append(" ").append(operador).append(" ").append(siguiente);
-            if ("-".equals(operador)) {
-                resultado -= siguiente;
-            } else {
-                resultado += siguiente;
-            }
+        try {
+            Generador generador = new Generador(nivel);
+            return generador.generarEjercicioUnico();
+        } catch (IllegalArgumentException | IllegalStateException ex) {
+            JOptionPane.showMessageDialog(frame,
+                    "No se pudo generar un ejercicio para el nivel actual: " + ex.getMessage(),
+                    "Configuración inválida", JOptionPane.ERROR_MESSAGE);
         }
-
-        return new EjercicioMultiple(expresion.toString(), resultado);
-    }
-
-    private int numeroAleatorio(int minimo, int maximo) {
-        return random.nextInt(maximo - minimo + 1) + minimo;
+        cerrarModo();
+        return null;
     }
 
     private void verificarRespuesta() {
