@@ -1,0 +1,4 @@
+# Descripcion|min|max|operaciones|numero_maximo|operadores (separados por comas)
+Nivel 1 (0 a 5 pts)|0|5|2|10|+
+Nivel 2 (6 a 10 pts)|6|10|2|50|+
+Nivel 3 (11 a 15 pts)|11|15|3|50|+,-
