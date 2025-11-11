@@ -3,6 +3,7 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.image.BufferedImage;
 import java.time.LocalDate;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
@@ -250,7 +251,9 @@ public class ModoDificultadInteligente {
 
         lblTituloEjercicio.setText("Ejercicio " + ejerciciosGenerados.size() + " de " + ejerciciosTotales);
         lblNivel.setText(descripcionNivel(nivelActual));
-        lblTextoEjercicio.setText(ejercicioActual.getEjercicioTexto());
+        String textoEjercicio = ejercicioActual.getEjercicioTexto();
+        lblTextoEjercicio.setText(textoEjercicio);
+        ajustarTamanoFuenteEjercicio(textoEjercicio);
 
         panelEjercicio.setBackground(generarColorPastelAleatorio());
 
@@ -627,6 +630,36 @@ public class ModoDificultadInteligente {
             return "";
         }
         return "<html><div style='text-align:center;'>" + texto + "</div></html>";
+    }
+
+    private void ajustarTamanoFuenteEjercicio(String texto) {
+        if (texto == null) {
+            texto = "";
+        }
+
+        Dimension screenSize = Toolkit.getDefaultToolkit().getScreenSize();
+        double anchoObjetivo = screenSize.width * 0.7;
+        int fontSize = calcularTamanioFuente(texto, anchoObjetivo);
+        lblTextoEjercicio.setFont(new Font("Arial", Font.BOLD, fontSize));
+    }
+
+    private int calcularTamanioFuente(String texto, double anchoObjetivo) {
+        int fontSize = 10;
+        int anchoTexto;
+
+        BufferedImage img = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = img.createGraphics();
+
+        do {
+            Font font = new Font("Arial", Font.BOLD, fontSize);
+            g2d.setFont(font);
+            FontMetrics metrics = g2d.getFontMetrics();
+            anchoTexto = metrics.stringWidth(texto);
+            fontSize++;
+        } while (anchoTexto < anchoObjetivo && fontSize < 300);
+
+        g2d.dispose();
+        return Math.max(10, fontSize - 1);
     }
 
     private void iniciarContador() {
