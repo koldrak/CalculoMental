@@ -3,6 +3,7 @@ import javax.swing.event.DocumentEvent;
 import javax.swing.event.DocumentListener;
 import java.awt.*;
 import java.awt.event.*;
+import java.awt.image.BufferedImage;
 import java.time.LocalDate;
 import java.time.format.TextStyle;
 import java.util.ArrayList;
@@ -250,7 +251,9 @@ public class ModoDificultadInteligente {
 
         lblTituloEjercicio.setText("Ejercicio " + ejerciciosGenerados.size() + " de " + ejerciciosTotales);
         lblNivel.setText(descripcionNivel(nivelActual));
-        lblTextoEjercicio.setText(ejercicioActual.getEjercicioTexto());
+        String textoEjercicio = ejercicioActual.getEjercicioTexto();
+        lblTextoEjercicio.setText(textoEjercicio);
+        ajustarTamanoFuenteEjercicio(textoEjercicio);
 
         panelEjercicio.setBackground(generarColorPastelAleatorio());
 
@@ -262,6 +265,31 @@ public class ModoDificultadInteligente {
         cardLayout.show(panelPrincipal, EstadoPantalla.EJERCICIO.name());
         frame.getContentPane().revalidate();
         frame.getContentPane().repaint();
+    }
+
+    private void ajustarTamanoFuenteEjercicio(String texto) {
+        int fontSize = calcularTamanoFuente(texto, Toolkit.getDefaultToolkit().getScreenSize().width * 0.7);
+        lblTextoEjercicio.setFont(new Font("Arial", Font.BOLD, fontSize));
+    }
+
+    private int calcularTamanoFuente(String texto, double anchoObjetivo) {
+        if (texto == null || texto.isEmpty()) {
+            return 70;
+        }
+        int objetivo = (int) Math.max(100, anchoObjetivo);
+        BufferedImage img = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = img.createGraphics();
+        int fontSize = 10;
+        int anchoTexto;
+        do {
+            Font font = new Font("Arial", Font.BOLD, fontSize);
+            g2d.setFont(font);
+            FontMetrics metrics = g2d.getFontMetrics();
+            anchoTexto = metrics.stringWidth(texto);
+            fontSize++;
+        } while (anchoTexto < objetivo && fontSize < 300);
+        g2d.dispose();
+        return Math.max(20, fontSize - 1);
     }
 
     private EjercicioMultiple generarEjercicio(NivelDificultad nivel) {
