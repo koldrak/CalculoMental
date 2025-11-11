@@ -314,16 +314,7 @@ public class ModoDificultadInteligente {
             filaSuperior.add(lblEjercicio);
             filaSuperior.add(Box.createHorizontalStrut(30));
 
-            JLabel lblRetro = crearEtiqueta("", 28, Font.PLAIN, SwingConstants.LEFT);
-            lblRetro.setForeground(Color.DARK_GRAY);
-            lblRetro.setAlignmentY(Component.CENTER_ALIGNMENT);
-            Dimension dialogoDimension = new Dimension(450, 70);
-            lblRetro.setPreferredSize(dialogoDimension);
-            lblRetro.setMaximumSize(new Dimension(600, 80));
-            lblRetro.setMinimumSize(new Dimension(320, 60));
-            filaSuperior.add(lblRetro);
-            filaSuperior.add(Box.createHorizontalStrut(30));
-
+            
             JTextField campoRespuesta = new JTextField();
             campoRespuesta.setFont(new Font("Arial", Font.PLAIN, 36));
             campoRespuesta.setHorizontalAlignment(SwingConstants.CENTER);
@@ -334,6 +325,16 @@ public class ModoDificultadInteligente {
             campoRespuesta.setAlignmentY(Component.CENTER_ALIGNMENT);
             filaSuperior.add(campoRespuesta);
             filaSuperior.add(Box.createHorizontalGlue());
+            
+            JLabel lblRetro = crearEtiqueta("", 28, Font.PLAIN, SwingConstants.LEFT);
+            lblRetro.setForeground(Color.DARK_GRAY);
+            lblRetro.setAlignmentY(Component.CENTER_ALIGNMENT);
+            Dimension dialogoDimension = new Dimension(450, 70);
+            lblRetro.setPreferredSize(dialogoDimension);
+            lblRetro.setMaximumSize(new Dimension(600, 80));
+            lblRetro.setMinimumSize(new Dimension(320, 60));
+            filaSuperior.add(lblRetro);
+            filaSuperior.add(Box.createHorizontalStrut(30));
 
             fila.add(filaSuperior);
 
