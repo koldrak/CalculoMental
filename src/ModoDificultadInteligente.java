@@ -28,6 +28,7 @@ public class ModoDificultadInteligente {
     private JPanel panelListaRespuestas;
     private List<JTextField> camposRespuestas = new ArrayList<>();
     private List<JLabel> etiquetasRetroalimentacion = new ArrayList<>();
+    private final List<Timer> temporizadoresRespuesta = new ArrayList<>();
     private final List<EstadoRespuesta> estadosRespuestas = new ArrayList<>();
     private JButton btnFinalizar;
     private Timer timer;
@@ -294,6 +295,7 @@ public class ModoDificultadInteligente {
         camposRespuestas.clear();
         etiquetasRetroalimentacion.clear();
         estadosRespuestas.clear();
+        temporizadoresRespuesta.clear();
 
         for (int i = 0; i < ejerciciosGenerados.size(); i++) {
             EjercicioMultiple ejercicio = ejerciciosGenerados.get(i);
@@ -310,7 +312,17 @@ public class ModoDificultadInteligente {
                     SwingConstants.LEFT);
             lblEjercicio.setAlignmentY(Component.CENTER_ALIGNMENT);
             filaSuperior.add(lblEjercicio);
-            filaSuperior.add(Box.createHorizontalGlue());
+            filaSuperior.add(Box.createHorizontalStrut(30));
+
+            JLabel lblRetro = crearEtiqueta("", 28, Font.PLAIN, SwingConstants.LEFT);
+            lblRetro.setForeground(Color.DARK_GRAY);
+            lblRetro.setAlignmentY(Component.CENTER_ALIGNMENT);
+            Dimension dialogoDimension = new Dimension(450, 70);
+            lblRetro.setPreferredSize(dialogoDimension);
+            lblRetro.setMaximumSize(new Dimension(600, 80));
+            lblRetro.setMinimumSize(new Dimension(320, 60));
+            filaSuperior.add(lblRetro);
+            filaSuperior.add(Box.createHorizontalStrut(30));
 
             JTextField campoRespuesta = new JTextField();
             campoRespuesta.setFont(new Font("Arial", Font.PLAIN, 36));
@@ -320,16 +332,10 @@ public class ModoDificultadInteligente {
             campoRespuesta.setMaximumSize(new Dimension(300, 70));
             campoRespuesta.setMinimumSize(new Dimension(200, 60));
             campoRespuesta.setAlignmentY(Component.CENTER_ALIGNMENT);
-            filaSuperior.add(Box.createHorizontalStrut(20));
             filaSuperior.add(campoRespuesta);
+            filaSuperior.add(Box.createHorizontalGlue());
 
             fila.add(filaSuperior);
-            fila.add(Box.createVerticalStrut(10));
-
-            JLabel lblRetro = crearEtiqueta("", 28, Font.PLAIN, SwingConstants.LEFT);
-            lblRetro.setForeground(Color.DARK_GRAY);
-            lblRetro.setAlignmentX(Component.LEFT_ALIGNMENT);
-            fila.add(lblRetro);
 
             panelListaRespuestas.add(fila);
             panelListaRespuestas.add(Box.createVerticalStrut(30));
@@ -338,23 +344,24 @@ public class ModoDificultadInteligente {
             campoRespuesta.getDocument().addDocumentListener(new DocumentListener() {
                 @Override
                 public void insertUpdate(DocumentEvent e) {
-                    evaluarRespuestaInteractiva(indice);
+                    manejarCambioRespuesta(indice);
                 }
 
                 @Override
                 public void removeUpdate(DocumentEvent e) {
-                    evaluarRespuestaInteractiva(indice);
+                    manejarCambioRespuesta(indice);
                 }
 
                 @Override
                 public void changedUpdate(DocumentEvent e) {
-                    evaluarRespuestaInteractiva(indice);
+                    manejarCambioRespuesta(indice);
                 }
             });
 
             camposRespuestas.add(campoRespuesta);
             etiquetasRetroalimentacion.add(lblRetro);
             estadosRespuestas.add(EstadoRespuesta.SIN_RESPUESTA);
+            temporizadoresRespuesta.add(null);
         }
 
         btnFinalizar.setText("Finalizar");
@@ -414,6 +421,8 @@ public class ModoDificultadInteligente {
             return;
         }
 
+        cancelarTemporizadoresPendientes();
+
         int correctas = 0;
 
         for (int i = 0; i < ejerciciosGenerados.size(); i++) {
@@ -472,7 +481,7 @@ public class ModoDificultadInteligente {
         String texto = campo.getText().trim().replace(",", ".");
 
         if (texto.isEmpty()) {
-            etiquetaRetro.setText("Ingresa tu respuesta.");
+            etiquetaRetro.setText(formatearDialogo("Ingresa tu respuesta."));
             etiquetaRetro.setForeground(Color.DARK_GRAY);
             estadosRespuestas.set(indice, EstadoRespuesta.SIN_RESPUESTA);
             actualizarEstadoFinalizar();
@@ -485,16 +494,18 @@ public class ModoDificultadInteligente {
             double respuestaUsuario = Double.parseDouble(texto);
             boolean esCorrecto = Math.abs(respuestaUsuario - resultadoEsperado) < 1e-6;
             if (esCorrecto) {
-                etiquetaRetro.setText("¡Correcto!");
+                etiquetaRetro.setText(formatearDialogo("¡Correcto!"));
                 etiquetaRetro.setForeground(new Color(0, 128, 0));
                 estadosRespuestas.set(indice, EstadoRespuesta.CORRECTA);
             } else {
-                etiquetaRetro.setText("Incorrecto. La correcta es " + formatearResultado(resultadoEsperado) + ".");
+                etiquetaRetro.setText(formatearDialogo("Incorrecto. La correcta es "
+                        + formatearResultado(resultadoEsperado) + "."));
                 etiquetaRetro.setForeground(Color.RED);
                 estadosRespuestas.set(indice, EstadoRespuesta.INCORRECTA);
             }
         } catch (NumberFormatException ex) {
-            etiquetaRetro.setText("Valor inválido. La correcta es " + formatearResultado(resultadoEsperado) + ".");
+            etiquetaRetro.setText(formatearDialogo("Valor inválido. La correcta es "
+                    + formatearResultado(resultadoEsperado) + "."));
             etiquetaRetro.setForeground(Color.RED);
             estadosRespuestas.set(indice, EstadoRespuesta.INVALIDA);
         }
@@ -511,7 +522,8 @@ public class ModoDificultadInteligente {
         double resultadoEsperado = ejercicio.resultado;
 
         if (texto.isEmpty()) {
-            etiquetaRetro.setText("Sin respuesta. La correcta es " + formatearResultado(resultadoEsperado) + ".");
+            etiquetaRetro.setText(formatearDialogo("Sin respuesta. La correcta es "
+                    + formatearResultado(resultadoEsperado) + "."));
             etiquetaRetro.setForeground(Color.RED);
             return EstadoRespuesta.SIN_RESPUESTA;
         }
@@ -520,15 +532,17 @@ public class ModoDificultadInteligente {
             double respuestaUsuario = Double.parseDouble(texto);
             boolean esCorrecto = Math.abs(respuestaUsuario - resultadoEsperado) < 1e-6;
             if (esCorrecto) {
-                etiquetaRetro.setText("¡Correcto!");
+                etiquetaRetro.setText(formatearDialogo("¡Correcto!"));
                 etiquetaRetro.setForeground(new Color(0, 128, 0));
                 return EstadoRespuesta.CORRECTA;
             }
-            etiquetaRetro.setText("Incorrecto. La correcta es " + formatearResultado(resultadoEsperado) + ".");
+            etiquetaRetro.setText(formatearDialogo("Incorrecto. La correcta es "
+                    + formatearResultado(resultadoEsperado) + "."));
             etiquetaRetro.setForeground(Color.RED);
             return EstadoRespuesta.INCORRECTA;
         } catch (NumberFormatException ex) {
-            etiquetaRetro.setText("Valor inválido. La correcta es " + formatearResultado(resultadoEsperado) + ".");
+            etiquetaRetro.setText(formatearDialogo("Valor inválido. La correcta es "
+                    + formatearResultado(resultadoEsperado) + "."));
             etiquetaRetro.setForeground(Color.RED);
             return EstadoRespuesta.INVALIDA;
         }
@@ -541,8 +555,73 @@ public class ModoDificultadInteligente {
         }
     }
 
+    private void manejarCambioRespuesta(int indice) {
+        if (indice < 0 || indice >= ejerciciosGenerados.size()) {
+            return;
+        }
+
+        JTextField campo = camposRespuestas.get(indice);
+        String texto = campo.getText().trim();
+
+        if (texto.isEmpty()) {
+            cancelarTemporizador(indice);
+            evaluarRespuestaInteractiva(indice);
+            actualizarEstadoFinalizar();
+            return;
+        }
+
+        programarEvaluacionRespuesta(indice);
+        actualizarEstadoFinalizar();
+    }
+
+    private void programarEvaluacionRespuesta(int indice) {
+        cancelarTemporizador(indice);
+
+        JLabel etiquetaRetro = etiquetasRetroalimentacion.get(indice);
+        etiquetaRetro.setText(formatearDialogo("Verificando..."));
+        etiquetaRetro.setForeground(Color.DARK_GRAY);
+        estadosRespuestas.set(indice, EstadoRespuesta.SIN_RESPUESTA);
+
+        Timer temporizador = new Timer(2000, e -> {
+            ((Timer) e.getSource()).stop();
+            evaluarRespuestaInteractiva(indice);
+            temporizadoresRespuesta.set(indice, null);
+        });
+        temporizador.setRepeats(false);
+        temporizadoresRespuesta.set(indice, temporizador);
+        temporizador.start();
+    }
+
+    private void cancelarTemporizador(int indice) {
+        if (indice < 0 || indice >= temporizadoresRespuesta.size()) {
+            return;
+        }
+        Timer temporizador = temporizadoresRespuesta.get(indice);
+        if (temporizador != null && temporizador.isRunning()) {
+            temporizador.stop();
+        }
+        temporizadoresRespuesta.set(indice, null);
+    }
+
+    private void cancelarTemporizadoresPendientes() {
+        for (int i = 0; i < temporizadoresRespuesta.size(); i++) {
+            Timer temporizador = temporizadoresRespuesta.get(i);
+            if (temporizador != null && temporizador.isRunning()) {
+                temporizador.stop();
+            }
+            temporizadoresRespuesta.set(i, null);
+        }
+    }
+
     private String formatearEjercicioParaHoja(String texto) {
         return "<html><div style='padding-right:20px;'>" + texto + "</div></html>";
+    }
+
+    private String formatearDialogo(String texto) {
+        if (texto == null || texto.isEmpty()) {
+            return "";
+        }
+        return "<html><div style='text-align:left;'>" + texto + "</div></html>";
     }
 
     private void iniciarContador() {
