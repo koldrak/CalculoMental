@@ -191,7 +191,7 @@ public class ModoDificultadInteligente {
         scrollPane.getVerticalScrollBar().setUnitIncrement(16);
         panelCorreccion.add(scrollPane, BorderLayout.CENTER);
 
-        JPanel panelBotones = new JPanel();
+        JPanel panelBotones = new JPanel(new FlowLayout(FlowLayout.CENTER));
         panelBotones.setOpaque(false);
 
         btnFinalizar = new JButton("Finalizar");
@@ -200,8 +200,6 @@ public class ModoDificultadInteligente {
         btnFinalizar.addActionListener(e -> {
             if (!respuestasEvaluadas) {
                 evaluarRespuestas();
-            } else {
-                cerrarModo();
             }
         });
         panelBotones.add(btnFinalizar);
@@ -304,17 +302,19 @@ public class ModoDificultadInteligente {
             fila.setOpaque(false);
             fila.setLayout(new BoxLayout(fila, BoxLayout.Y_AXIS));
 
-            JPanel filaSuperior = new JPanel();
+            JPanel filaSuperior = new JPanel(new GridBagLayout());
             filaSuperior.setOpaque(false);
-            filaSuperior.setLayout(new BoxLayout(filaSuperior, BoxLayout.X_AXIS));
+
+            GridBagConstraints gbc = new GridBagConstraints();
+            gbc.gridy = 0;
+            gbc.insets = new Insets(0, 20, 0, 20);
+            gbc.anchor = GridBagConstraints.CENTER;
 
             JLabel lblEjercicio = crearEtiqueta(formatearEjercicioParaHoja(ejercicio.getEjercicioTexto()), 40, Font.BOLD,
-                    SwingConstants.LEFT);
-            lblEjercicio.setAlignmentY(Component.CENTER_ALIGNMENT);
-            filaSuperior.add(lblEjercicio);
-            filaSuperior.add(Box.createHorizontalStrut(30));
+                    SwingConstants.CENTER);
+            gbc.gridx = 0;
+            filaSuperior.add(lblEjercicio, gbc);
 
-            
             JTextField campoRespuesta = new JTextField();
             campoRespuesta.setFont(new Font("Arial", Font.PLAIN, 36));
             campoRespuesta.setHorizontalAlignment(SwingConstants.CENTER);
@@ -322,19 +322,17 @@ public class ModoDificultadInteligente {
             campoRespuesta.setPreferredSize(campoDimension);
             campoRespuesta.setMaximumSize(new Dimension(300, 70));
             campoRespuesta.setMinimumSize(new Dimension(200, 60));
-            campoRespuesta.setAlignmentY(Component.CENTER_ALIGNMENT);
-            filaSuperior.add(campoRespuesta);
-            filaSuperior.add(Box.createHorizontalGlue());
-            
-            JLabel lblRetro = crearEtiqueta("", 28, Font.PLAIN, SwingConstants.LEFT);
+            gbc.gridx = 1;
+            filaSuperior.add(campoRespuesta, gbc);
+
+            JLabel lblRetro = crearEtiqueta("", 28, Font.PLAIN, SwingConstants.CENTER);
             lblRetro.setForeground(Color.DARK_GRAY);
-            lblRetro.setAlignmentY(Component.CENTER_ALIGNMENT);
             Dimension dialogoDimension = new Dimension(450, 70);
             lblRetro.setPreferredSize(dialogoDimension);
             lblRetro.setMaximumSize(new Dimension(600, 80));
             lblRetro.setMinimumSize(new Dimension(320, 60));
-            filaSuperior.add(lblRetro);
-            filaSuperior.add(Box.createHorizontalStrut(30));
+            gbc.gridx = 2;
+            filaSuperior.add(lblRetro, gbc);
 
             fila.add(filaSuperior);
 
@@ -365,7 +363,6 @@ public class ModoDificultadInteligente {
             temporizadoresRespuesta.add(null);
         }
 
-        btnFinalizar.setText("Finalizar");
         btnFinalizar.setEnabled(false);
 
         cardLayout.show(panelPrincipal, EstadoPantalla.HOJA_RESPUESTAS.name());
@@ -447,18 +444,25 @@ public class ModoDificultadInteligente {
         }
 
         respuestasEvaluadas = true;
-        btnFinalizar.setEnabled(true);
-        btnFinalizar.setText("Cerrar");
+        btnFinalizar.setEnabled(false);
 
         JOptionPane.showMessageDialog(frame,
                 "Respuestas correctas: " + correctas + " de " + ejerciciosGenerados.size()
                         + "\nGrado final: " + gradoDificultad + " pts.");
+
+        cerrarModo(false);
     }
 
     private void cerrarModo() {
+        cerrarModo(true);
+    }
+
+    private void cerrarModo(boolean mostrarMensajeFinal) {
         detenerContador();
-        JOptionPane.showMessageDialog(frame,
-                "Has terminado el modo dificultad inteligente. Grado final: " + gradoDificultad + " pts.");
+        if (mostrarMensajeFinal) {
+            JOptionPane.showMessageDialog(frame,
+                    "Has terminado el modo dificultad inteligente. Grado final: " + gradoDificultad + " pts.");
+        }
         frame.dispose();
     }
 
@@ -615,14 +619,14 @@ public class ModoDificultadInteligente {
     }
 
     private String formatearEjercicioParaHoja(String texto) {
-        return "<html><div style='padding-right:20px;'>" + texto + "</div></html>";
+        return "<html><div style='padding-right:20px; text-align:center;'>" + texto + "</div></html>";
     }
 
     private String formatearDialogo(String texto) {
         if (texto == null || texto.isEmpty()) {
             return "";
         }
-        return "<html><div style='text-align:left;'>" + texto + "</div></html>";
+        return "<html><div style='text-align:center;'>" + texto + "</div></html>";
     }
 
     private void iniciarContador() {
