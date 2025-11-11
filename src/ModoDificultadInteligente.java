@@ -1,6 +1,7 @@
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.*;
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Random;
@@ -17,23 +18,23 @@ public class ModoDificultadInteligente {
     private JLabel lblTextoEjercicio;
     private JLabel lblCorreccionTitulo;
     private JLabel lblCorreccionNivel;
-    private JLabel lblCorreccionEjercicio;
-    private JLabel lblRetroalimentacion;
-    private JTextField txtRespuesta;
-    private JButton btnVerificar;
-    private JButton btnContinuar;
+    private JPanel panelListaRespuestas;
+    private List<JTextField> camposRespuestas = new ArrayList<>();
+    private List<JLabel> etiquetasRetroalimentacion = new ArrayList<>();
+    private JButton btnEvaluar;
+    private JButton btnFinalizar;
     private Timer timer;
     private int segundos;
 
     private EjercicioMultiple ejercicioActual;
     private int ejerciciosTotales;
-    private int ejerciciosCompletados;
+    private final List<EjercicioMultiple> ejerciciosGenerados = new ArrayList<>();
     private int gradoDificultad;
-    private Color fondoEjercicioActual;
+    private boolean respuestasEvaluadas;
 
     private enum EstadoPantalla {
         EJERCICIO,
-        CORRECCION
+        HOJA_RESPUESTAS
     }
 
     private EstadoPantalla estadoPantalla = EstadoPantalla.EJERCICIO;
@@ -66,9 +67,13 @@ public class ModoDificultadInteligente {
                 if (e.getKeyCode() == KeyEvent.VK_ESCAPE) {
                     cerrarModo();
                 } else if (estadoPantalla == EstadoPantalla.EJERCICIO && (e.getKeyCode() == KeyEvent.VK_SPACE || e.getKeyCode() == KeyEvent.VK_ENTER)) {
-                    mostrarCorreccion();
-                } else if (estadoPantalla == EstadoPantalla.CORRECCION && btnContinuar.isEnabled() && (e.getKeyCode() == KeyEvent.VK_SPACE || e.getKeyCode() == KeyEvent.VK_ENTER)) {
-                    continuar();
+                    avanzarEjercicio();
+                } else if (estadoPantalla == EstadoPantalla.HOJA_RESPUESTAS && (e.getKeyCode() == KeyEvent.VK_SPACE || e.getKeyCode() == KeyEvent.VK_ENTER)) {
+                    if (!respuestasEvaluadas) {
+                        evaluarRespuestas();
+                    } else {
+                        cerrarModo();
+                    }
                 }
             }
         });
@@ -83,7 +88,7 @@ public class ModoDificultadInteligente {
             @Override
             public void mouseClicked(MouseEvent e) {
                 if (estadoPantalla == EstadoPantalla.EJERCICIO) {
-                    mostrarCorreccion();
+                    avanzarEjercicio();
                 }
             }
         });
@@ -131,7 +136,7 @@ public class ModoDificultadInteligente {
         JPanel panelSuperior = new JPanel(new BorderLayout());
         panelSuperior.setOpaque(false);
 
-        lblCorreccionTitulo = crearEtiqueta("Corrección", 60, Font.BOLD, SwingConstants.CENTER);
+        lblCorreccionTitulo = crearEtiqueta("Hoja de respuestas", 60, Font.BOLD, SwingConstants.CENTER);
         lblCorreccionTitulo.setForeground(Color.DARK_GRAY);
         panelSuperior.add(lblCorreccionTitulo, BorderLayout.CENTER);
 
@@ -141,48 +146,33 @@ public class ModoDificultadInteligente {
 
         panelCorreccion.add(panelSuperior, BorderLayout.NORTH);
 
-        JPanel panelCentro = new JPanel();
-        panelCentro.setOpaque(false);
-        panelCentro.setLayout(new BoxLayout(panelCentro, BoxLayout.Y_AXIS));
+        panelListaRespuestas = new JPanel();
+        panelListaRespuestas.setOpaque(false);
+        panelListaRespuestas.setLayout(new BoxLayout(panelListaRespuestas, BoxLayout.Y_AXIS));
 
-        lblCorreccionEjercicio = crearEtiqueta("", 50, Font.BOLD, SwingConstants.CENTER);
-        lblCorreccionEjercicio.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panelCentro.add(lblCorreccionEjercicio);
-        panelCentro.add(Box.createVerticalStrut(30));
-
-        txtRespuesta = new JTextField();
-        txtRespuesta.setFont(new Font("Arial", Font.PLAIN, 36));
-        txtRespuesta.setHorizontalAlignment(SwingConstants.CENTER);
-        txtRespuesta.setMaximumSize(new Dimension(600, 70));
-        panelCentro.add(txtRespuesta);
-        panelCentro.add(Box.createVerticalStrut(20));
-
-        lblRetroalimentacion = crearEtiqueta("", 28, Font.PLAIN, SwingConstants.CENTER);
-        lblRetroalimentacion.setForeground(Color.DARK_GRAY);
-        lblRetroalimentacion.setAlignmentX(Component.CENTER_ALIGNMENT);
-        panelCentro.add(lblRetroalimentacion);
-        panelCentro.add(Box.createVerticalStrut(20));
+        JScrollPane scrollPane = new JScrollPane(panelListaRespuestas);
+        scrollPane.setBorder(BorderFactory.createEmptyBorder());
+        scrollPane.getVerticalScrollBar().setUnitIncrement(16);
+        panelCorreccion.add(scrollPane, BorderLayout.CENTER);
 
         JPanel panelBotones = new JPanel();
         panelBotones.setOpaque(false);
 
-        btnVerificar = new JButton("Verificar");
-        btnVerificar.setFont(new Font("Arial", Font.BOLD, 30));
-        btnVerificar.addActionListener(e -> verificarRespuesta());
-        panelBotones.add(btnVerificar);
+        btnEvaluar = new JButton("Verificar respuestas");
+        btnEvaluar.setFont(new Font("Arial", Font.BOLD, 30));
+        btnEvaluar.addActionListener(e -> evaluarRespuestas());
+        panelBotones.add(btnEvaluar);
 
-        btnContinuar = new JButton("Siguiente");
-        btnContinuar.setFont(new Font("Arial", Font.BOLD, 30));
-        btnContinuar.setEnabled(false);
-        btnContinuar.addActionListener(e -> continuar());
+        btnFinalizar = new JButton("Finalizar");
+        btnFinalizar.setFont(new Font("Arial", Font.BOLD, 30));
+        btnFinalizar.setEnabled(false);
+        btnFinalizar.addActionListener(e -> cerrarModo());
         panelBotones.add(Box.createHorizontalStrut(20));
-        panelBotones.add(btnContinuar);
+        panelBotones.add(btnFinalizar);
 
-        panelCentro.add(panelBotones);
+        panelCorreccion.add(panelBotones, BorderLayout.SOUTH);
 
-        panelCorreccion.add(panelCentro, BorderLayout.CENTER);
-
-        panelPrincipal.add(panelCorreccion, EstadoPantalla.CORRECCION.name());
+        panelPrincipal.add(panelCorreccion, EstadoPantalla.HOJA_RESPUESTAS.name());
     }
 
     private JLabel crearEtiqueta(String texto, int tamanioFuente, int estilo, int alineacion) {
@@ -192,8 +182,8 @@ public class ModoDificultadInteligente {
     }
 
     private void mostrarSiguienteEjercicio() {
-        if (ejerciciosCompletados >= ejerciciosTotales) {
-            cerrarModo();
+        if (ejerciciosGenerados.size() >= ejerciciosTotales) {
+            mostrarHojaRespuestas();
             return;
         }
 
@@ -206,12 +196,13 @@ public class ModoDificultadInteligente {
             return;
         }
 
-        lblTituloEjercicio.setText("Ejercicio " + (ejerciciosCompletados + 1) + " de " + ejerciciosTotales);
+        ejerciciosGenerados.add(ejercicioActual);
+
+        lblTituloEjercicio.setText("Ejercicio " + ejerciciosGenerados.size() + " de " + ejerciciosTotales);
         lblNivel.setText(descripcionNivel(nivelActual));
         lblTextoEjercicio.setText(ejercicioActual.getEjercicioTexto());
 
-        fondoEjercicioActual = generarColorPastelAleatorio();
-        panelEjercicio.setBackground(fondoEjercicioActual);
+        panelEjercicio.setBackground(generarColorPastelAleatorio());
 
         segundos = 0;
         lblCronometro.setText("⏱ 0s");
@@ -236,76 +227,64 @@ public class ModoDificultadInteligente {
         return null;
     }
 
-    private void verificarRespuesta() {
-        if (estadoPantalla != EstadoPantalla.CORRECCION) {
-            return;
-        }
+    private void mostrarHojaRespuestas() {
+        detenerContador();
+        estadoPantalla = EstadoPantalla.HOJA_RESPUESTAS;
+        respuestasEvaluadas = false;
 
-        String texto = txtRespuesta.getText().trim().replace(",", ".");
-        if (texto.isEmpty()) {
-            mostrarMensaje("Ingresa una respuesta antes de verificar.", Color.RED);
-            return;
-        }
-
-        double respuestaUsuario;
-        try {
-            respuestaUsuario = Double.parseDouble(texto);
-        } catch (NumberFormatException e) {
-            mostrarMensaje("La respuesta debe ser un número válido.", Color.RED);
-            return;
-        }
-
-        double resultadoEsperado = ejercicioActual.resultado;
-        boolean esCorrecto = Math.abs(respuestaUsuario - resultadoEsperado) < 1e-6;
-
-        if (esCorrecto) {
-            gradoDificultad = NivelDificultad.clampGrado(gradoDificultad + 1);
-            mostrarMensaje("¡Correcto!", new Color(0, 128, 0));
-        } else {
-            gradoDificultad = NivelDificultad.clampGrado(gradoDificultad - 1);
-            mostrarMensaje("Incorrecto. La respuesta correcta es " + formatearResultado(resultadoEsperado) + ".", Color.RED);
-        }
-
-        ConfigFileHelper.guardarGradoDificultad(gradoDificultad);
-        ejerciciosCompletados++;
-
+        lblCorreccionTitulo.setText("Hoja de respuestas");
         NivelDificultad nivelActual = obtenerNivelActual();
         if (nivelActual != null) {
-            lblNivel.setText(descripcionNivel(nivelActual));
             lblCorreccionNivel.setText(descripcionNivel(nivelActual));
         }
 
-        btnVerificar.setEnabled(false);
-        txtRespuesta.setEditable(false);
-        btnContinuar.setEnabled(true);
-        if (ejerciciosCompletados >= ejerciciosTotales) {
-            btnContinuar.setText("Finalizar");
+        panelCorreccion.setBackground(Color.WHITE);
+        panelListaRespuestas.removeAll();
+        camposRespuestas.clear();
+        etiquetasRetroalimentacion.clear();
+
+        for (int i = 0; i < ejerciciosGenerados.size(); i++) {
+            EjercicioMultiple ejercicio = ejerciciosGenerados.get(i);
+
+            JPanel fila = new JPanel();
+            fila.setOpaque(false);
+            fila.setLayout(new BoxLayout(fila, BoxLayout.Y_AXIS));
+
+            JLabel lblEjercicio = crearEtiqueta("Ejercicio " + (i + 1) + ": " + ejercicio.getEjercicioTexto(), 40, Font.BOLD, SwingConstants.CENTER);
+            lblEjercicio.setAlignmentX(Component.CENTER_ALIGNMENT);
+            fila.add(lblEjercicio);
+            fila.add(Box.createVerticalStrut(10));
+
+            JTextField campoRespuesta = new JTextField();
+            campoRespuesta.setFont(new Font("Arial", Font.PLAIN, 36));
+            campoRespuesta.setHorizontalAlignment(SwingConstants.CENTER);
+            campoRespuesta.setMaximumSize(new Dimension(600, 70));
+            campoRespuesta.setAlignmentX(Component.CENTER_ALIGNMENT);
+            fila.add(campoRespuesta);
+            fila.add(Box.createVerticalStrut(10));
+
+            JLabel lblRetro = crearEtiqueta("", 28, Font.PLAIN, SwingConstants.CENTER);
+            lblRetro.setForeground(Color.DARK_GRAY);
+            lblRetro.setAlignmentX(Component.CENTER_ALIGNMENT);
+            fila.add(lblRetro);
+
+            panelListaRespuestas.add(fila);
+            panelListaRespuestas.add(Box.createVerticalStrut(30));
+
+            camposRespuestas.add(campoRespuesta);
+            etiquetasRetroalimentacion.add(lblRetro);
         }
-    }
 
-    private void mostrarCorreccion() {
-        if (estadoPantalla != EstadoPantalla.EJERCICIO) {
-            return;
+        btnEvaluar.setEnabled(true);
+        btnFinalizar.setEnabled(false);
+
+        cardLayout.show(panelPrincipal, EstadoPantalla.HOJA_RESPUESTAS.name());
+        panelListaRespuestas.revalidate();
+        panelListaRespuestas.repaint();
+
+        if (!camposRespuestas.isEmpty()) {
+            SwingUtilities.invokeLater(() -> camposRespuestas.get(0).requestFocusInWindow());
         }
-
-        detenerContador();
-        estadoPantalla = EstadoPantalla.CORRECCION;
-
-        lblCorreccionTitulo.setText("Corrección - Ejercicio " + (ejerciciosCompletados + 1) + " de " + ejerciciosTotales);
-        lblCorreccionNivel.setText(lblNivel.getText());
-        lblCorreccionEjercicio.setText(ejercicioActual.getEjercicioTexto());
-        lblRetroalimentacion.setText("");
-
-        txtRespuesta.setText("");
-        txtRespuesta.setEditable(true);
-        btnVerificar.setEnabled(true);
-        btnContinuar.setEnabled(false);
-        btnContinuar.setText("Siguiente");
-
-        panelCorreccion.setBackground(fondoEjercicioActual != null ? fondoEjercicioActual : Color.WHITE);
-
-        cardLayout.show(panelPrincipal, EstadoPantalla.CORRECCION.name());
-        SwingUtilities.invokeLater(() -> txtRespuesta.requestFocusInWindow());
     }
 
     private String descripcionNivel(NivelDificultad nivelActual) {
@@ -328,11 +307,6 @@ public class ModoDificultadInteligente {
         return nivel;
     }
 
-    private void mostrarMensaje(String mensaje, Color color) {
-        lblRetroalimentacion.setText(mensaje);
-        lblRetroalimentacion.setForeground(color);
-    }
-
     private String formatearResultado(double valor) {
         if (Math.abs(valor - Math.rint(valor)) < 1e-6) {
             return String.valueOf((long) Math.round(valor));
@@ -340,15 +314,78 @@ public class ModoDificultadInteligente {
         return String.valueOf(valor);
     }
 
-    private void continuar() {
-        if (!btnContinuar.isEnabled()) {
+    private void avanzarEjercicio() {
+        if (estadoPantalla != EstadoPantalla.EJERCICIO) {
             return;
         }
-        if (ejerciciosCompletados >= ejerciciosTotales) {
-            cerrarModo();
+
+        detenerContador();
+        if (ejerciciosGenerados.size() >= ejerciciosTotales) {
+            mostrarHojaRespuestas();
         } else {
             mostrarSiguienteEjercicio();
         }
+    }
+
+    private void evaluarRespuestas() {
+        if (respuestasEvaluadas) {
+            return;
+        }
+
+        int correctas = 0;
+
+        for (int i = 0; i < ejerciciosGenerados.size(); i++) {
+            EjercicioMultiple ejercicio = ejerciciosGenerados.get(i);
+            JTextField campo = camposRespuestas.get(i);
+            JLabel etiquetaRetro = etiquetasRetroalimentacion.get(i);
+
+            String texto = campo.getText().trim().replace(",", ".");
+            double resultadoEsperado = ejercicio.resultado;
+
+            if (texto.isEmpty()) {
+                etiquetaRetro.setText("Sin respuesta. La correcta es " + formatearResultado(resultadoEsperado) + ".");
+                etiquetaRetro.setForeground(Color.RED);
+                gradoDificultad = NivelDificultad.clampGrado(gradoDificultad - 1);
+                continue;
+            }
+
+            double respuestaUsuario;
+            try {
+                respuestaUsuario = Double.parseDouble(texto);
+            } catch (NumberFormatException ex) {
+                etiquetaRetro.setText("Valor inválido. La correcta es " + formatearResultado(resultadoEsperado) + ".");
+                etiquetaRetro.setForeground(Color.RED);
+                gradoDificultad = NivelDificultad.clampGrado(gradoDificultad - 1);
+                continue;
+            }
+
+            boolean esCorrecto = Math.abs(respuestaUsuario - resultadoEsperado) < 1e-6;
+            if (esCorrecto) {
+                etiquetaRetro.setText("¡Correcto!");
+                etiquetaRetro.setForeground(new Color(0, 128, 0));
+                gradoDificultad = NivelDificultad.clampGrado(gradoDificultad + 1);
+                correctas++;
+            } else {
+                etiquetaRetro.setText("Incorrecto. La correcta es " + formatearResultado(resultadoEsperado) + ".");
+                etiquetaRetro.setForeground(Color.RED);
+                gradoDificultad = NivelDificultad.clampGrado(gradoDificultad - 1);
+            }
+        }
+
+        ConfigFileHelper.guardarGradoDificultad(gradoDificultad);
+
+        NivelDificultad nivelActual = obtenerNivelActual();
+        if (nivelActual != null) {
+            lblCorreccionNivel.setText(descripcionNivel(nivelActual));
+        }
+
+        respuestasEvaluadas = true;
+        btnEvaluar.setEnabled(false);
+        btnFinalizar.setEnabled(true);
+
+        JOptionPane.showMessageDialog(frame,
+                "Respuestas correctas: " + correctas + " de " + ejerciciosGenerados.size()
+                        + "\nGrado final: " + gradoDificultad + " pts.");
     }
 
     private void cerrarModo() {
