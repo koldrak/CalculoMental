@@ -42,6 +42,35 @@ public class Generador {
         }
     }
 
+    public Generador(NivelDificultad nivel) {
+        this.permitirDecimales = nivel.isPermitirDecimales();
+        this.permitirNegativos = nivel.isPermitirNegativos();
+        this.permitirParentesis = nivel.isPermitirParentesis();
+        this.permitirDespejarX = nivel.isPermitirDespejarX();
+        this.cantidadOperaciones = Math.max(1, nivel.getCantidadOperaciones());
+        this.cantidadEjercicios = Math.max(1, nivel.getCantidadEjercicios());
+
+        List<Double> numerosDefinidos = nivel.obtenerNumeros();
+        if (numerosDefinidos.isEmpty()) {
+            throw new IllegalArgumentException("La definición de números del nivel está vacía.");
+        }
+        this.numeros = ajustarDecimalesSegunConfiguracion(numerosDefinidos);
+        if (this.numeros.isEmpty()) {
+            throw new IllegalArgumentException("La configuración de números no produce valores válidos.");
+        }
+
+        String[] operadores = nivel.getOperadoresPermitidos();
+        this.simbolos = new ArrayList<>(operadores.length);
+        for (String operador : operadores) {
+            if (!operador.isEmpty()) {
+                this.simbolos.add(operador);
+            }
+        }
+        if (this.simbolos.isEmpty()) {
+            throw new IllegalArgumentException("Debes definir al menos un operador para el nivel.");
+        }
+    }
+
     public List<Ejercicio> generarEjercicios() {
         List<Ejercicio> lista = new ArrayList<>();
 
@@ -67,6 +96,24 @@ public class Generador {
 
         Collections.shuffle(lista);
         return lista;
+    }
+
+    public EjercicioMultiple generarEjercicioUnico() {
+        int originalCantidad = this.cantidadEjercicios;
+        try {
+            this.cantidadEjercicios = 1;
+            List<Ejercicio> ejercicios = generarEjercicios();
+            if (!ejercicios.isEmpty() && ejercicios.get(0) instanceof EjercicioMultiple) {
+                return (EjercicioMultiple) ejercicios.get(0);
+            }
+            if (!ejercicios.isEmpty()) {
+                Ejercicio ejercicio = ejercicios.get(0);
+                return new EjercicioMultiple(ejercicio.getEjercicioTexto().replace(" = ?", ""), ejercicio.resultado);
+            }
+        } finally {
+            this.cantidadEjercicios = originalCantidad;
+        }
+        throw new IllegalStateException("No se pudo generar un ejercicio válido con la configuración actual.");
     }
 
 

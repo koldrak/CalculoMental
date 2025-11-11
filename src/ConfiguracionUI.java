@@ -55,6 +55,16 @@ public class ConfiguracionUI {
         chkParentesis.setSelected("SI".equalsIgnoreCase(config.getOrDefault("PARENTESIS", "NO")));
         chkDespejarX.setSelected("SI".equalsIgnoreCase(config.getOrDefault("DESPEJAR_X", "NO")));
 
+        int gradoDificultadLeido;
+        try {
+            gradoDificultadLeido = Integer.parseInt(config.getOrDefault("GRADO_DIFICULTAD", "0"));
+        } catch (NumberFormatException e) {
+            gradoDificultadLeido = 0;
+        }
+        final int gradoDificultad = NivelDificultad.clampGrado(gradoDificultadLeido);
+        JComboBox<NivelDificultad> comboNivel = new JComboBox<>();
+        actualizarComboNiveles(comboNivel, gradoDificultad);
+
         txtCantidadOperaciones.setText(config.getOrDefault("OPERACIONES POR EJERCICIO", "2"));
         try {
             int cantidad = Integer.parseInt(config.getOrDefault("CANTIDAD EJERCICIOS", "7"));
@@ -90,10 +100,27 @@ public class ConfiguracionUI {
         opcionesPanel.add(txtCantidadOperaciones);
         opcionesPanel.add(new JLabel("Cantidad de ejercicios:"));
         opcionesPanel.add(spnCantidadEjercicios);
+        opcionesPanel.add(new JLabel("Nivel dificultad inteligente:"));
+        opcionesPanel.add(comboNivel);
+
+        JButton btnEditarNiveles = new JButton("Editar niveles inteligentes...");
+        btnEditarNiveles.addActionListener(e -> {
+            NivelDificultad seleccionado = (NivelDificultad) comboNivel.getSelectedItem();
+            int gradoReferencia = seleccionado != null ? seleccionado.getMinimo() : gradoDificultad;
+            EditorNivelesDificultadDialog dialogo = new EditorNivelesDificultadDialog(frame);
+            dialogo.setVisible(true);
+            NivelDificultad.recargar();
+            actualizarComboNiveles(comboNivel, gradoReferencia);
+        });
+        opcionesPanel.add(new JLabel("Gestionar niveles inteligentes:"));
+        opcionesPanel.add(btnEditarNiveles);
 
         JButton btnGuardar = new JButton("Guardar Cambios");
         btnGuardar.addActionListener(e -> {
-                guardarConfig(chkDecimales, chkNegativos, chkParentesis, chkDespejarX, txtCantidadOperaciones.getText(), (Integer) spnCantidadEjercicios.getValue());
+            NivelDificultad nivelSeleccionado = (NivelDificultad) comboNivel.getSelectedItem();
+            int gradoSeleccionado = nivelSeleccionado != null ? nivelSeleccionado.getMinimo() : gradoDificultad;
+            guardarConfig(chkDecimales, chkNegativos, chkParentesis, chkDespejarX,
+                    txtCantidadOperaciones.getText(), (Integer) spnCantidadEjercicios.getValue(), gradoSeleccionado);
             guardarSimbolos(chkSuma, chkResta, chkMultiplicacion, chkDivision);
             guardarNumeros(numerosModel);
 
@@ -151,6 +178,21 @@ public class ConfiguracionUI {
         frame.setVisible(true);
     }
 
+    private static void actualizarComboNiveles(JComboBox<NivelDificultad> combo, int gradoReferencia) {
+        combo.removeAllItems();
+        java.util.List<NivelDificultad> niveles = NivelDificultad.obtenerNiveles();
+        for (NivelDificultad nivel : niveles) {
+            combo.addItem(nivel);
+        }
+        if (!niveles.isEmpty()) {
+            NivelDificultad seleccionado = NivelDificultad.desdeGrado(gradoReferencia);
+            if (seleccionado == null) {
+                seleccionado = niveles.get(0);
+            }
+            combo.setSelectedItem(seleccionado);
+        }
+    }
+
     private static Map<String, String> leerArchivoComoMapa(String ruta) {
         Map<String, String> mapa = new LinkedHashMap<>();
         try (BufferedReader br = new BufferedReader(new FileReader(ruta))) {
@@ -180,7 +222,8 @@ public class ConfiguracionUI {
         return sb.toString();
     }
 
-    private static void guardarConfig(JCheckBox dec, JCheckBox neg, JCheckBox par, JCheckBox despejarX, String cantOperaciones, int cantidadEjercicios) {
+    private static void guardarConfig(JCheckBox dec, JCheckBox neg, JCheckBox par, JCheckBox despejarX,
+            String cantOperaciones, int cantidadEjercicios, int gradoDificultad) {
         try (PrintWriter pw = new PrintWriter(new FileWriter(CONFIG_PATH))) {
             pw.println("DECIMALES: " + (dec.isSelected() ? "SI" : "NO"));
             pw.println("NUMEROS NEGATIVOS: " + (neg.isSelected() ? "SI" : "NO"));
@@ -188,6 +231,7 @@ public class ConfiguracionUI {
             pw.println("DESPEJAR_X: " + (despejarX.isSelected() ? "SI" : "NO"));
             pw.println("OPERACIONES POR EJERCICIO: " + cantOperaciones.trim());
             pw.println("CANTIDAD EJERCICIOS: " + cantidadEjercicios);
+            pw.println("GRADO_DIFICULTAD: " + gradoDificultad);
         } catch (IOException e) {
             System.out.println("Error al guardar config.txt");
         }

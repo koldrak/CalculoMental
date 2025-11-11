@@ -1,0 +1,4 @@
+# descripcion|min|max|operaciones|ejercicios|decimales(SI/NO)|negativos(SI/NO)|parentesis(SI/NO)|despejarX(SI/NO)|operadores separados por coma|numeros (usar ; para separar rangos o valores)
+Nivel 1 (0 a 5 pts)|0|5|2|7|NO|NO|NO|NO|+|1-10
+Nivel 2 (6 a 10 pts)|6|10|2|7|NO|NO|NO|NO|+|1-50
+Nivel 3 (11 a 15 pts)|11|15|3|7|NO|NO|NO|NO|+,-|1-50
