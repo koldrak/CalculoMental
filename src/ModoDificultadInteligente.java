@@ -13,6 +13,7 @@ import java.util.Locale;
 import java.util.Random;
 
 public class ModoDificultadInteligente {
+    private static final String PLACEHOLDER_RESPUESTA = "ingresa tu resultado";
     private JFrame frame;
     private JPanel panelPrincipal;
     private CardLayout cardLayout;
@@ -325,6 +326,7 @@ public class ModoDificultadInteligente {
             campoRespuesta.setPreferredSize(campoDimension);
             campoRespuesta.setMaximumSize(new Dimension(300, 70));
             campoRespuesta.setMinimumSize(new Dimension(200, 60));
+            configurarPlaceholder(campoRespuesta);
             gbc.gridx = 1;
             filaSuperior.add(campoRespuesta, gbc);
 
@@ -486,7 +488,7 @@ public class ModoDificultadInteligente {
         JTextField campo = camposRespuestas.get(indice);
         JLabel etiquetaRetro = etiquetasRetroalimentacion.get(indice);
 
-        String texto = campo.getText().trim().replace(",", ".");
+        String texto = obtenerTextoNormalizado(campo);
 
         if (texto.isEmpty()) {
             etiquetaRetro.setText(formatearDialogo("Ingresa tu respuesta."));
@@ -526,7 +528,7 @@ public class ModoDificultadInteligente {
         JTextField campo = camposRespuestas.get(indice);
         JLabel etiquetaRetro = etiquetasRetroalimentacion.get(indice);
 
-        String texto = campo.getText().trim().replace(",", ".");
+        String texto = obtenerTextoNormalizado(campo);
         double resultadoEsperado = ejercicio.resultado;
 
         if (texto.isEmpty()) {
@@ -557,7 +559,7 @@ public class ModoDificultadInteligente {
     }
 
     private void actualizarEstadoFinalizar() {
-        boolean habilitar = camposRespuestas.stream().anyMatch(c -> !c.getText().trim().isEmpty());
+        boolean habilitar = camposRespuestas.stream().anyMatch(c -> !obtenerTextoUsuario(c).isEmpty());
         if (!respuestasEvaluadas) {
             btnFinalizar.setEnabled(habilitar);
         }
@@ -569,7 +571,7 @@ public class ModoDificultadInteligente {
         }
 
         JTextField campo = camposRespuestas.get(indice);
-        String texto = campo.getText().trim();
+        String texto = obtenerTextoUsuario(campo);
 
         if (texto.isEmpty()) {
             cancelarTemporizador(indice);
@@ -630,6 +632,65 @@ public class ModoDificultadInteligente {
             return "";
         }
         return "<html><div style='text-align:center;'>" + texto + "</div></html>";
+    }
+
+    private void configurarPlaceholder(JTextField campo) {
+        if (campo == null) {
+            return;
+        }
+
+        campo.putClientProperty("colorTextoOriginal", campo.getForeground());
+        establecerPlaceholder(campo);
+
+        campo.addFocusListener(new FocusAdapter() {
+            @Override
+            public void focusGained(FocusEvent e) {
+                if (esPlaceholderActivo(campo)) {
+                    campo.setText("");
+                    campo.setForeground(obtenerColorTextoOriginal(campo));
+                    campo.putClientProperty("placeholderActivo", Boolean.FALSE);
+                }
+            }
+
+            @Override
+            public void focusLost(FocusEvent e) {
+                if (campo.getText() == null || campo.getText().trim().isEmpty()) {
+                    establecerPlaceholder(campo);
+                }
+            }
+        });
+    }
+
+    private void establecerPlaceholder(JTextField campo) {
+        campo.setText(PLACEHOLDER_RESPUESTA);
+        campo.setForeground(Color.GRAY);
+        campo.putClientProperty("placeholderActivo", Boolean.TRUE);
+        campo.setCaretPosition(0);
+    }
+
+    private boolean esPlaceholderActivo(JTextField campo) {
+        Object valor = campo.getClientProperty("placeholderActivo");
+        return Boolean.TRUE.equals(valor);
+    }
+
+    private Color obtenerColorTextoOriginal(JTextField campo) {
+        Object valor = campo.getClientProperty("colorTextoOriginal");
+        if (valor instanceof Color) {
+            return (Color) valor;
+        }
+        return Color.BLACK;
+    }
+
+    private String obtenerTextoUsuario(JTextField campo) {
+        if (campo == null || esPlaceholderActivo(campo)) {
+            return "";
+        }
+        String texto = campo.getText();
+        return texto == null ? "" : texto.trim();
+    }
+
+    private String obtenerTextoNormalizado(JTextField campo) {
+        return obtenerTextoUsuario(campo).replace(",", ".");
     }
 
     private void ajustarTamanoFuenteEjercicio(String texto) {
