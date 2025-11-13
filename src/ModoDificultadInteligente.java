@@ -592,7 +592,7 @@ public class ModoDificultadInteligente {
         etiquetaRetro.setForeground(Color.DARK_GRAY);
         estadosRespuestas.set(indice, EstadoRespuesta.SIN_RESPUESTA);
 
-        Timer temporizador = new Timer(2000, e -> {
+        Timer temporizador = new Timer(1000, e -> {
             ((Timer) e.getSource()).stop();
             evaluarRespuestaInteractiva(indice);
             temporizadoresRespuesta.set(indice, null);
