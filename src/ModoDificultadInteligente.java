@@ -13,7 +13,7 @@ import java.util.Locale;
 import java.util.Random;
 
 public class ModoDificultadInteligente {
-    private static final String PLACEHOLDER_RESPUESTA = "ingresa tu resultado";
+    private static final String PLACEHOLDER_RESPUESTA = "ingresa numero";
     private JFrame frame;
     private JPanel panelPrincipal;
     private CardLayout cardLayout;
@@ -322,9 +322,9 @@ public class ModoDificultadInteligente {
             JTextField campoRespuesta = new JTextField();
             campoRespuesta.setFont(new Font("Arial", Font.PLAIN, 36));
             campoRespuesta.setHorizontalAlignment(SwingConstants.CENTER);
-            Dimension campoDimension = new Dimension(250, 70);
+            Dimension campoDimension = new Dimension(300, 70);
             campoRespuesta.setPreferredSize(campoDimension);
-            campoRespuesta.setMaximumSize(new Dimension(300, 70));
+            campoRespuesta.setMaximumSize(new Dimension(300, 80));
             campoRespuesta.setMinimumSize(new Dimension(200, 60));
             configurarPlaceholder(campoRespuesta);
             gbc.gridx = 1;
