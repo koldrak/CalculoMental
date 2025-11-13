@@ -15,7 +15,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 public class NivelDificultad {
-    private static final String NIVELES_PATH = "niveles_dificultad.txt";
+    private static final String NIVELES_PATH = "niveles_dificultad.csv";
     private static final Pattern PATRON_RANGO = Pattern.compile(
             "\\s*(-?\\d+(?:\\.\\d+)?)[\\s]*-[\\s]*(-?\\d+(?:\\.\\d+)?)(?:\\s*@\\s*(\\d+))?\\s*");
     private static List<NivelDificultad> cache;
@@ -155,25 +155,28 @@ public class NivelDificultad {
             try (BufferedReader reader = new BufferedReader(new FileReader(archivo))) {
                 String linea;
                 while ((linea = reader.readLine()) != null) {
-                    linea = linea.trim();
-                    if (linea.isEmpty() || linea.startsWith("#")) {
+                    if (linea.trim().isEmpty() || linea.trim().startsWith("#")) {
                         continue;
                     }
-                    String[] partes = linea.split("\\|");
-                    if (partes.length < 6) {
+                    String[] partes = parseLineaCsv(linea);
+                    if (partes.length == 0 || esEncabezado(partes)) {
                         continue;
                     }
+                    if (partes.length < 11) {
+                        continue;
+                    }
+
                     String descripcion = partes[0].trim();
                     Integer minimo = parseEntero(partes[1]);
                     Integer maximo = parseEntero(partes[2]);
                     Integer cantidadOperaciones = parseEntero(partes[3]);
-                    Integer cantidadEjercicios = partes.length > 4 ? parseEntero(partes[4]) : null;
-                    Boolean permitirDecimales = partes.length > 5 ? parseBooleano(partes[5]) : null;
-                    Boolean permitirNegativos = partes.length > 6 ? parseBooleano(partes[6]) : null;
-                    Boolean permitirParentesis = partes.length > 7 ? parseBooleano(partes[7]) : null;
-                    Boolean permitirDespejarX = partes.length > 8 ? parseBooleano(partes[8]) : null;
-                    String[] operadores = partes.length > 9 ? parseOperadores(partes[9]) : new String[0];
-                    String definicionNumeros = partes.length > 10 ? partes[10].trim() : "";
+                    Integer cantidadEjercicios = parseEntero(partes[4]);
+                    Boolean permitirDecimales = parseBooleano(partes[5]);
+                    Boolean permitirNegativos = parseBooleano(partes[6]);
+                    Boolean permitirParentesis = parseBooleano(partes[7]);
+                    Boolean permitirDespejarX = parseBooleano(partes[8]);
+                    String[] operadores = parseOperadores(partes[9]);
+                    String definicionNumeros = partes[10].trim();
 
                     if (descripcion.isEmpty() || minimo == null || maximo == null
                             || cantidadOperaciones == null || cantidadEjercicios == null
@@ -207,6 +210,7 @@ public class NivelDificultad {
 
     private static void escribirNiveles(List<NivelDificultad> niveles) {
         try (PrintWriter writer = new PrintWriter(new FileWriter(NIVELES_PATH))) {
+            writer.println("descripcion,min,max,operaciones,ejercicios,decimales,negativos,parentesis,despejarX,operadores,numeros");
             for (NivelDificultad nivel : niveles) {
                 writer.println(formatearLinea(nivel));
             }
@@ -227,19 +231,68 @@ public class NivelDificultad {
     }
 
     private static String formatearLinea(NivelDificultad nivel) {
-        return String.join("|",
+        return String.join(",",
                 Arrays.asList(
-                        nivel.getDescripcion(),
+                        escaparCsv(nivel.getDescripcion()),
                         String.valueOf(nivel.getMinimo()),
                         String.valueOf(nivel.getMaximo()),
                         String.valueOf(nivel.getCantidadOperaciones()),
                         String.valueOf(nivel.getCantidadEjercicios()),
-                        nivel.isPermitirDecimales() ? "SI" : "NO",
-                        nivel.isPermitirNegativos() ? "SI" : "NO",
-                        nivel.isPermitirParentesis() ? "SI" : "NO",
-                        nivel.isPermitirDespejarX() ? "SI" : "NO",
-                        nivel.getOperadoresComoCadena(),
-                        nivel.getDefinicionNumeros()));
+                        escaparCsv(nivel.isPermitirDecimales() ? "SI" : "NO"),
+                        escaparCsv(nivel.isPermitirNegativos() ? "SI" : "NO"),
+                        escaparCsv(nivel.isPermitirParentesis() ? "SI" : "NO"),
+                        escaparCsv(nivel.isPermitirDespejarX() ? "SI" : "NO"),
+                        escaparCsv(nivel.getOperadoresComoCadena()),
+                        escaparCsv(nivel.getDefinicionNumeros())));
+    }
+
+    private static String escaparCsv(String valor) {
+        String contenido = valor == null ? "" : valor;
+        String escapado = contenido.replace("\"", "\"\"");
+        if (escapado.contains(",") || escapado.contains("\"") || escapado.contains("\n") || escapado.contains("\r")) {
+            return "\"" + escapado + "\"";
+        }
+        return escapado;
+    }
+
+    private static boolean esEncabezado(String[] columnas) {
+        if (columnas.length == 0) {
+            return false;
+        }
+        String primera = columnas[0].trim().toLowerCase();
+        return "descripcion".equals(primera) || "descripción".equals(primera);
+    }
+
+    private static String[] parseLineaCsv(String linea) {
+        List<String> valores = new ArrayList<>();
+        StringBuilder actual = new StringBuilder();
+        boolean enComillas = false;
+        for (int i = 0; i < linea.length(); i++) {
+            char c = linea.charAt(i);
+            if (enComillas) {
+                if (c == '"') {
+                    if (i + 1 < linea.length() && linea.charAt(i + 1) == '"') {
+                        actual.append('"');
+                        i++;
+                    } else {
+                        enComillas = false;
+                    }
+                } else {
+                    actual.append(c);
+                }
+            } else {
+                if (c == '"') {
+                    enComillas = true;
+                } else if (c == ',') {
+                    valores.add(actual.toString().trim());
+                    actual.setLength(0);
+                } else {
+                    actual.append(c);
+                }
+            }
+        }
+        valores.add(actual.toString().trim());
+        return valores.toArray(new String[0]);
     }
 
     private static Integer parseEntero(String valor) {

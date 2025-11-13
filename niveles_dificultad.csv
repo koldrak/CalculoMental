@@ -1,0 +1,4 @@
+descripcion,min,max,operaciones,ejercicios,decimales,negativos,parentesis,despejarX,operadores,numeros
+"Nivel 1 (0 a 5 pts)",0,5,2,7,NO,NO,NO,NO,+,"1-10"
+"Nivel 2 (6 a 10 pts)",6,10,2,7,NO,NO,NO,NO,+,"1-50"
+"Nivel 3 (11 a 15 pts)",11,15,3,7,NO,NO,NO,NO,"+,-","1-50"

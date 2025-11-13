@@ -268,6 +268,31 @@ public class ModoDificultadInteligente {
         frame.getContentPane().repaint();
     }
 
+    private void ajustarTamanoFuenteEjercicio(String texto) {
+        int fontSize = calcularTamanoFuente(texto, Toolkit.getDefaultToolkit().getScreenSize().width * 0.7);
+        lblTextoEjercicio.setFont(new Font("Arial", Font.BOLD, fontSize));
+    }
+
+    private int calcularTamanoFuente(String texto, double anchoObjetivo) {
+        if (texto == null || texto.isEmpty()) {
+            return 70;
+        }
+        int objetivo = (int) Math.max(100, anchoObjetivo);
+        BufferedImage img = new BufferedImage(1, 1, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g2d = img.createGraphics();
+        int fontSize = 10;
+        int anchoTexto;
+        do {
+            Font font = new Font("Arial", Font.BOLD, fontSize);
+            g2d.setFont(font);
+            FontMetrics metrics = g2d.getFontMetrics();
+            anchoTexto = metrics.stringWidth(texto);
+            fontSize++;
+        } while (anchoTexto < objetivo && fontSize < 300);
+        g2d.dispose();
+        return Math.max(20, fontSize - 1);
+    }
+
     private EjercicioMultiple generarEjercicio(NivelDificultad nivel) {
         try {
             Generador generador = new Generador(nivel);
